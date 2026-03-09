@@ -20,7 +20,7 @@ struct SettingsView: View {
     @State private var showingSubscription = false
     
     var body: some View {
-        NavigationStack {
+        NavigationView {
             List {
                 // Subscription Section
                 subscriptionSection
@@ -117,14 +117,20 @@ struct SettingsView: View {
                 Text("Keep Alive: \(keepAliveInterval)s")
                     .font(.subheadline)
                 
-                Slider(value: Double($keepAliveInterval), in: 10...120, step: 10)
+                Slider(value: Binding(
+                    get: { Double(keepAliveInterval) },
+                    set: { keepAliveInterval = Int($0) }
+                ), in: 10...120, step: 10)
             }
             
             VStack(alignment: .leading) {
                 Text("Timeout: \(connectionTimeout)s")
                     .font(.subheadline)
                 
-                Slider(value: Double($connectionTimeout), in: 10...120, step: 10)
+                Slider(value: Binding(
+                    get: { Double(connectionTimeout) },
+                    set: { connectionTimeout = Int($0) }
+                ), in: 10...120, step: 10)
             }
         }
     }
@@ -196,7 +202,7 @@ struct SettingsView: View {
             NavigationLink {
                 AboutView()
             } label: {
-                Label("About SSH Terminal", systemImage: "info.circle")
+                Label("About SmartSSH", systemImage: "info.circle")
             }
             
             Link(destination: URL(string: "https://github.com/example/sshterminal")!) {
@@ -280,7 +286,7 @@ struct AboutView: View {
                     }
                     .padding(.top, 20)
                     
-                    Text("SSH Terminal")
+                    Text("SmartSSH")
                         .font(.title)
                         .fontWeight(.bold)
                     
@@ -308,7 +314,7 @@ struct AboutView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                     
-                    Text("© 2026 SSH Terminal. All rights reserved.")
+                    Text("© 2026 SmartSSH. All rights reserved.")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }

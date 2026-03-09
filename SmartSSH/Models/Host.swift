@@ -1,6 +1,6 @@
 //
 //  Host.swift
-//  SSH Terminal
+//  SmartSSH
 //
 //  SSH Host model
 //
@@ -8,7 +8,33 @@
 import Foundation
 import CoreData
 
+@objc(Host)
+public class Host: NSManagedObject, Identifiable {
+    
+}
+
 extension Host {
+    @nonobjc public class func fetchRequest() -> NSFetchRequest<Host> {
+        return NSFetchRequest<Host>(entityName: "Host")
+    }
+    
+    @NSManaged public var color: String?
+    @NSManaged public var createdAt: Date?
+    @NSManaged public var group: String?
+    @NSManaged public var hostname: String?
+    @NSManaged public var id: UUID?
+    @NSManaged public var keyFingerprint: String?
+    @NSManaged public var lastConnectedAt: Date?
+    @NSManaged public var name: String?
+    @NSManaged public var password: String?
+    @NSManaged public var port: Int16
+    @NSManaged public var snippets: [String]?
+    @NSManaged public var status: String?
+    @NSManaged public var tags: [String]?
+    @NSManaged public var updatedAt: Date?
+    @NSManaged public var username: String?
+    
+    // Computed properties
     var wrappedName: String {
         name ?? "Unknown Host"
     }
@@ -34,6 +60,7 @@ extension Host {
         }
     }
     
+    // Factory method
     static func create(
         in context: NSManagedObjectContext,
         name: String,

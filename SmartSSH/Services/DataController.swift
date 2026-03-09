@@ -14,7 +14,7 @@ class DataController: ObservableObject {
     let container: NSPersistentCloudKitContainer
     
     init() {
-        container = NSPersistentCloudKitContainer(name: "SSHTerminal")
+        container = NSPersistentCloudKitContainer(name: "SmartSSH")
         
         // Enable iCloud sync
         container.persistentStoreDescriptions.first?.setOption(

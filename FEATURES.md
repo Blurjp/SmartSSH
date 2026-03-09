@@ -92,8 +92,8 @@
 ## 🗂️ File Structure
 
 ```
-SSHTerminal/
-├── SSHTerminalApp.swift              # App entry point
+SmartSSH/
+├── SmartSSHApp.swift              # App entry point
 ├── ContentView.swift                 # Main view
 │
 ├── Views/
@@ -119,9 +119,9 @@ SSHTerminal/
 │   └── QuickActions.swift           # Quick commands
 │
 ├── Assets.xcassets/                 # App icons & colors
-├── SSHTerminal.xcdatamodeld/        # Core Data model
+├── SmartSSH.xcdatamodeld/        # Core Data model
 ├── Info.plist                       # App configuration
-└── SSHTerminal.entitlements         # iCloud permissions
+└── SmartSSH.entitlements         # iCloud permissions
 ```
 
 ---
@@ -129,15 +129,15 @@ SSHTerminal/
 ## 🚀 How to Run
 
 ### Option 1: Xcode (Recommended)
-1. Open `SSHTerminal.xcodeproj` in Xcode
+1. Open `SmartSSH.xcodeproj` in Xcode
 2. Select your Apple Developer Team
 3. Choose a simulator or device
 4. Press **⌘ + R** to run
 
 ### Option 2: Command Line
 ```bash
-cd /Users/jianpinghuang/projects/SSHTerminal
-open SSHTerminal.xcodeproj
+cd /Users/jianpinghuang/projects/SmartSSH
+open SmartSSH.xcodeproj
 ```
 
 ---
@@ -156,7 +156,7 @@ open SSHTerminal.xcodeproj
    platform :ios, '15.0'
    use_frameworks!
 
-   target 'SSHTerminal' do
+   target 'SmartSSH' do
      pod 'NMSSH', '~> 2.3'
    end
    ```
@@ -168,7 +168,7 @@ open SSHTerminal.xcodeproj
 
 4. **Use .xcworkspace**
    ```bash
-   open SSHTerminal.xcworkspace
+   open SmartSSH.xcworkspace
    ```
 
 ### Add AI (OpenAI)

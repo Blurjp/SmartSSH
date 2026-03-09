@@ -12,9 +12,9 @@ import StoreKit
 
 enum SubscriptionTier: String, CaseIterable {
     case free = "free"
-    case pro = "com.sshterminal.pro.monthly"
-    case proYearly = "com.sshterminal.pro.yearly"
-    case team = "com.sshterminal.team.monthly"
+    case pro = "com.smartssh.pro.monthly"
+    case proYearly = "com.smartssh.pro.yearly"
+    case team = "com.smartssh.team.monthly"
     
     var displayName: String {
         switch self {
@@ -198,7 +198,7 @@ class SubscriptionManager: ObservableObject {
     
     // MARK: - Verify Transaction
     
-    private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
+    private nonisolated func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
         case .unverified:
             throw StoreError.failedVerification

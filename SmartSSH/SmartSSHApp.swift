@@ -1,5 +1,5 @@
 //
-//  SSHTerminalApp.swift
+//  SmartSSHApp.swift
 //  SSH Terminal
 //
 //  A modern, native iOS SSH client
@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct SSHTerminalApp: App {
+struct SmartSSHApp: App {
     @StateObject private var dataController = DataController.shared
     
     var body: some Scene {

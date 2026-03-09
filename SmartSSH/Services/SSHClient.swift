@@ -50,8 +50,8 @@ class SSHClient: ObservableObject {
     @Published var isConnected: Bool = false
     
     private var session: Any? // NMSSHSession in production
-    private var host: Host?
-    private var outputQueue = DispatchQueue(label: "com.sshterminal.output")
+    var host: Host?
+    private var outputQueue = DispatchQueue(label: "com.smartssh.output")
     
     // MARK: - Connection
     

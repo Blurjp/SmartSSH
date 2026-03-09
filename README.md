@@ -46,7 +46,7 @@ A modern, native iOS SSH client that's better than Termius.
 
 ```bash
 # Open in Xcode
-open SSHTerminal.xcodeproj
+open SmartSSH.xcodeproj
 ```
 
 ## Pricing Strategy

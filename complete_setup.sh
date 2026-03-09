@@ -16,7 +16,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Project directory
-PROJECT_DIR="/Users/jianpinghuang/projects/SSHTerminal"
+PROJECT_DIR="/Users/jianpinghuang/projects/SmartSSH"
 cd "$PROJECT_DIR"
 
 # Function to print status
@@ -70,7 +70,7 @@ if command -v pod &> /dev/null; then
         pod install
         print_status "Dependencies installed"
         echo ""
-        echo "⚠️  Note: Use SSHTerminal.xcworkspace instead of .xcodeproj"
+        echo "⚠️  Note: Use SmartSSH.xcworkspace instead of .xcodeproj"
     fi
 else
     print_warning "CocoaPods not found. Skipping dependency installation."
@@ -81,7 +81,7 @@ fi
 echo ""
 echo "Step 4: App Icon..."
 
-ICON_DIR="$PROJECT_DIR/SSHTerminal/Assets.xcassets/AppIcon.appiconset"
+ICON_DIR="$PROJECT_DIR/SmartSSH/Assets.xcassets/AppIcon.appiconset"
 if [ -d "$ICON_DIR" ]; then
     print_status "App icon assets directory exists"
     echo ""
@@ -105,10 +105,10 @@ echo ""
 echo "🚀 Next Steps:"
 echo ""
 echo "1. Open the project:"
-if [ -f "SSHTerminal.xcworkspace" ]; then
-    echo "   open SSHTerminal.xcworkspace"
+if [ -f "SmartSSH.xcworkspace" ]; then
+    echo "   open SmartSSH.xcworkspace"
 else
-    echo "   open SSHTerminal.xcodeproj"
+    echo "   open SmartSSH.xcodeproj"
 fi
 echo ""
 echo "2. Configure signing:"

@@ -107,7 +107,7 @@
 
 ### Open in Xcode
 ```bash
-open /Users/jianpinghuang/projects/SSHTerminal/SSHTerminal.xcodeproj
+open /Users/jianpinghuang/projects/SmartSSH/SmartSSH.xcodeproj
 ```
 
 ### Run the App
@@ -126,14 +126,14 @@ open /Users/jianpinghuang/projects/SSHTerminal/SSHTerminal.xcodeproj
 ## 📁 Complete File Structure
 
 ```
-SSHTerminal/
-├── SSHTerminal.xcodeproj          ✅ Xcode Project
+SmartSSH/
+├── SmartSSH.xcodeproj          ✅ Xcode Project
 ├── project.yml                    ✅ Xcodegen Config
 ├── Podfile                        ✅ CocoaPods Config
 ├── complete_setup.sh              ✅ Setup Script
 │
-├── SSHTerminal/
-│   ├── SSHTerminalApp.swift       ✅ App Entry Point
+├── SmartSSH/
+│   ├── SmartSSHApp.swift       ✅ App Entry Point
 │   │
 │   ├── Views/
 │   │   ├── ContentView.swift      ✅ Main View
@@ -161,9 +161,9 @@ SSHTerminal/
 │   │   └── QuickActions.swift     ✅ Quick Commands
 │   │
 │   ├── Assets.xcassets/           ✅ App Assets
-│   ├── SSHTerminal.xcdatamodeld/  ✅ Core Data Model
+│   ├── SmartSSH.xcdatamodeld/  ✅ Core Data Model
 │   ├── Info.plist                 ✅ App Config
-│   └── SSHTerminal.entitlements   ✅ Permissions
+│   └── SmartSSH.entitlements   ✅ Permissions
 │
 ├── README.md                      ✅ Project Overview
 ├── FEATURES.md                    ✅ Feature List
@@ -182,10 +182,10 @@ SSHTerminal/
 
 ### 2. **Add Real SSH** (30 min)
 ```bash
-cd /Users/jianpinghuang/projects/SSHTerminal
+cd /Users/jianpinghuang/projects/SmartSSH
 pod install
 ```
-- Open `SSHTerminal.xcworkspace`
+- Open `SmartSSH.xcworkspace`
 - Replace simulation code with NMSSH
 
 ### 3. **Configure OpenAI** (10 min)
@@ -325,8 +325,8 @@ Developer Tools
 
 ### Community
 - Discord: https://discord.gg/example
-- Twitter: @SSHTerminal
-- Reddit: r/SSHTerminal
+- Twitter: @SmartSSH
+- Reddit: r/SmartSSH
 
 ---
 

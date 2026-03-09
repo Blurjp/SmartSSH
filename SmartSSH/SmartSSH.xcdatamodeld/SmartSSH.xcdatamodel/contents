@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22225" systemVersion="23A344" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
-    <element name="Host" representedClassName="Host" syncable="YES" codeGenerationType="class">
+    <element name="Host" representedClassName="Host" syncable="YES">
         <attribute name="color" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="group" optional="YES" attributeType="String"/>
@@ -17,7 +17,7 @@
         <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="username" optional="YES" attributeType="String"/>
     </element>
-    <element name="SSHKey" representedClassName="SSHKey" syncable="YES" codeGenerationType="class">
+    <element name="SSHKey" representedClassName="SSHKey" syncable="YES">
         <attribute name="comment" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="fingerprint" optional="YES" attributeType="String"/>
@@ -27,7 +27,7 @@
         <attribute name="publicKey" optional="YES" attributeType="String"/>
         <attribute name="type" optional="YES" attributeType="String"/>
     </element>
-    <element name="Snippet" representedClassName="Snippet" syncable="YES" codeGenerationType="class">
+    <element name="Snippet" representedClassName="Snippet" syncable="YES">
         <attribute name="command" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="desc" optional="YES" attributeType="String"/>

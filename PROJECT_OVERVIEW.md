@@ -3,11 +3,11 @@
 ## 项目结构
 
 ```
-SSHTerminal/
-├── SSHTerminalApp.swift          # App 入口
+SmartSSH/
+├── SmartSSHApp.swift          # App 入口
 ├── Info.plist                    # App 配置
 ├── Assets.xcassets/              # 图片资源
-├── SSHTerminal.xcdatamodeld/     # Core Data 模型
+├── SmartSSH.xcdatamodeld/     # Core Data 模型
 │
 ├── Models/
 │   └── Host.swift                # Host 模型
@@ -34,7 +34,7 @@ SSHTerminal/
 1. 打开 Xcode
 2. File → New → Project
 3. 选择 iOS → App
-4. 产品名称: SSHTerminal
+4. 产品名称: SmartSSH
 5. 保存到: `/Users/jianpinghuang/projects/`
 6. 复制这些文件到新项目中
 
@@ -59,7 +59,7 @@ SSHTerminal/
 platform :ios, '15.0'
 use_frameworks!
 
-target 'SSHTerminal' do
+target 'SmartSSH' do
   pod 'NMSSH', '~> 2.3'
 end
 ```
