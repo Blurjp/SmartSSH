@@ -1,4 +1,4 @@
-# SSH Terminal - iOS SSH Client
+# SmartSSH - iOS SSH Client
 
 A modern, native iOS SSH client that's better than Termius.
 
@@ -27,8 +27,8 @@ A modern, native iOS SSH client that's better than Termius.
 
 ## Why Better Than Termius?
 
-| Feature | Termius | SSH Terminal |
-|---------|---------|--------------|
+| Feature | Termius | SmartSSH |
+|---------|---------|----------|
 | Price | $10/month | $4.99/month or $49/year |
 | Cloud Sync | Paid only | Free (iCloud) |
 | AI Features | None | Command suggestions, error diagnosis |
