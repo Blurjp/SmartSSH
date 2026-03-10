@@ -25,6 +25,7 @@
 		BD7968D68D105BB1893EE091 /* SFTPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2BA0AE0890F6559685100C6 /* SFTPClient.swift */; };
 		DA691BCB2CCFCCA0E7997DC9 /* KeysView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 787BCE4879DBAC889A25DBDE /* KeysView.swift */; };
 		E641F4C52CD09E83EAD7D50D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E17170E69DE9D857F586A051 /* ContentView.swift */; };
+		E9538228E2C9F227D4B9C9D2 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B43EC0028BD62D8D45F4B388 /* KeychainService.swift */; };
 		EDD0B37A49F9AD6606AD82F1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B9C6ADCE204DE387906D8A /* SettingsView.swift */; };
 		F01DF106172BFAA161183FAB /* SSHClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 617A837FE0FCF7161EDD79BA /* SSHClient.swift */; };
 		FCC824B7C354D564085F043A /* DataController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17160867D25F63BDD868E578 /* DataController.swift */; };
@@ -58,6 +59,7 @@
 		A9150627FAC9148979D4104F /* AIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIService.swift; sourceTree = "<group>"; };
 		AA1B42F8E7D2541A8E925604 /* AddHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddHostView.swift; sourceTree = "<group>"; };
 		AFA84B28150C48FABC4D3A7B /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
+		B43EC0028BD62D8D45F4B388 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		B7F93CA652D810BC204AB70E /* SmartSSHUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartSSHUITests.swift; sourceTree = "<group>"; };
 		BD628CF966BE60A9B6C3EE3C /* SmartSSH.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SmartSSH.entitlements; sourceTree = "<group>"; };
 		C4CD41535775A0408DD270A7 /* SmartSSH.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SmartSSH.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -114,6 +116,7 @@
 			children = (
 				A9150627FAC9148979D4104F /* AIService.swift */,
 				17160867D25F63BDD868E578 /* DataController.swift */,
+				B43EC0028BD62D8D45F4B388 /* KeychainService.swift */,
 				F2BA0AE0890F6559685100C6 /* SFTPClient.swift */,
 				617A837FE0FCF7161EDD79BA /* SSHClient.swift */,
 				486A81497D7085CBCE3092DC /* SSHManager.swift */,
@@ -271,6 +274,7 @@
 				FCC824B7C354D564085F043A /* DataController.swift in Sources */,
 				08F6662DD115E5CE99D8A17B /* Host.swift in Sources */,
 				913750A3F58DEF8916754D97 /* HostsView.swift in Sources */,
+				E9538228E2C9F227D4B9C9D2 /* KeychainService.swift in Sources */,
 				DA691BCB2CCFCCA0E7997DC9 /* KeysView.swift in Sources */,
 				5338B4A58AB3619CAB421E6F /* QuickActions.swift in Sources */,
 				BD7968D68D105BB1893EE091 /* SFTPClient.swift in Sources */,

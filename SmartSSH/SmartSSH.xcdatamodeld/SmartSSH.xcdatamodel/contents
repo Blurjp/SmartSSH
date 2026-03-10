@@ -9,12 +9,12 @@
         <attribute name="keyFingerprint" optional="YES" attributeType="String"/>
         <attribute name="lastConnectedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="name" optional="YES" attributeType="String"/>
-        <attribute name="password" optional="YES" attributeType="String"/>
         <attribute name="port" optional="YES" attributeType="Integer 16" defaultValueString="22" usesScalarValueType="YES"/>
         <attribute name="snippets" optional="YES" attributeType="Transformable" customClassName="[String]"/>
         <attribute name="status" optional="YES" attributeType="String"/>
         <attribute name="tags" optional="YES" attributeType="Transformable" customClassName="[String]"/>
         <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="useKeyAuth" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="username" optional="YES" attributeType="String"/>
     </element>
     <element name="SSHKey" representedClassName="SSHKey" syncable="YES">
