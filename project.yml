@@ -45,3 +45,16 @@ targets:
           - iCloud.com.smartssh.app
         com.apple.developer.icloud-services:
           - CloudDocuments
+
+  SmartSSHUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: SmartSSHUITests
+    dependencies:
+      - target: SmartSSH
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.smartssh.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_MODULE_NAME: SmartSSHUITests
