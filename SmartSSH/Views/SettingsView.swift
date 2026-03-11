@@ -15,8 +15,6 @@ struct SettingsView: View {
     @AppStorage("keepAliveInterval") private var keepAliveInterval = 30
     @AppStorage("connectionTimeout") private var connectionTimeout = 30
     @AppStorage("hapticFeedback") private var hapticFeedback = true
-    @AppStorage("aiEnabled") private var aiEnabled = true
-    
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showingSubscription = false
     @State private var settingsMessage = ""
@@ -35,9 +33,6 @@ struct SettingsView: View {
                 
                 // Connection Section
                 connectionSection
-                
-                // AI Section
-                aiSection
                 
                 // General Section
                 generalSection
@@ -87,7 +82,7 @@ struct SettingsView: View {
                 }
             }
         } footer: {
-            Text("Upgrade to Pro for unlimited hosts, AI features, and more.")
+            Text("Upgrade to Pro for unlimited hosts, SFTP access, and synced workflows.")
         }
     }
     
@@ -145,40 +140,6 @@ struct SettingsView: View {
         }
     }
     
-    // MARK: - AI Section
-    
-    private var aiSection: some View {
-        Section("AI Features") {
-            Toggle("Enable AI", isOn: $aiEnabled)
-                .disabled(!subscriptionManager.hasAccess(to: .aiFeatures))
-            
-            if subscriptionManager.hasAccess(to: .aiFeatures) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("AI Features Include:")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
-                    FeatureRow(icon: "sparkles", text: "Command Suggestions")
-                    FeatureRow(icon: "wrench.and.screwdriver", text: "Error Diagnosis")
-                    FeatureRow(icon: "book", text: "Command Explanations")
-                    FeatureRow(icon: "text.badge.plus", text: "Snippet Generation")
-                }
-            } else {
-                Button {
-                    showingSubscription = true
-                } label: {
-                    HStack {
-                        Image(systemName: "lock.fill")
-                            .foregroundStyle(.gray)
-                        
-                        Text("Upgrade to Pro")
-                            .font(.subheadline)
-                    }
-                }
-            }
-        }
-    }
-    
     // MARK: - General Section
     
     private var generalSection: some View {
@@ -196,6 +157,7 @@ struct SettingsView: View {
             } label: {
                 Label("Import Data", systemImage: "square.and.arrow.down")
             }
+            .disabled(!FileManager.default.fileExists(atPath: exportURL().path))
             
             Button(role: .destructive) {
                 clearAllData()
@@ -215,20 +177,12 @@ struct SettingsView: View {
                 Label("About SmartSSH", systemImage: "info.circle")
             }
             
-            Link(destination: URL(string: "https://github.com/example/sshterminal")!) {
+            Link(destination: URL(string: "https://github.com/Blurjp/SmartSSH")!) {
                 Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
             }
             
-            Link(destination: URL(string: "mailto:support@example.com")!) {
-                Label("Support", systemImage: "envelope")
-            }
-            
-            Link(destination: URL(string: "https://example.com/privacy")!) {
-                Label("Privacy Policy", systemImage: "hand.raised")
-            }
-            
-            Link(destination: URL(string: "https://example.com/terms")!) {
-                Label("Terms of Service", systemImage: "doc.text")
+            Link(destination: URL(string: "https://github.com/Blurjp/SmartSSH/issues")!) {
+                Label("Support", systemImage: "questionmark.circle")
             }
         }
     }
@@ -240,7 +194,7 @@ struct SettingsView: View {
             let payload = try makeExportPayload()
             let data = try JSONEncoder().encode(payload)
             try data.write(to: exportURL(), options: .atomic)
-            settingsMessage = "Exported app data to \(exportURL().lastPathComponent)."
+            settingsMessage = "Exported hosts and snippets to \(exportURL().lastPathComponent). SSH private keys stay in the Keychain and are not exported."
         } catch {
             settingsMessage = "Export failed: \(error.localizedDescription)"
         }
@@ -293,9 +247,7 @@ struct SettingsView: View {
         }
 
         let snippets = loadSavedSnippets()
-        let keys = SSHManager.shared.loadSavedKeys()
-
-        return SettingsExportPayload(hosts: hosts, snippets: snippets, keys: keys)
+        return SettingsExportPayload(hosts: hosts, snippets: snippets)
     }
 
     private func restore(from payload: SettingsExportPayload) throws {
@@ -321,16 +273,7 @@ struct SettingsView: View {
             UserDefaults.standard.set(snippetsData, forKey: "saved_snippets")
         }
 
-        let existingKeyNames = Set(SSHManager.shared.loadSavedKeys().map(\.name))
-        for key in payload.keys where !existingKeyNames.contains(key.name) {
-            SSHManager.shared.saveKey(
-                name: key.name,
-                privateKey: "UNAVAILABLE",
-                publicKey: key.publicKey,
-                fingerprint: key.fingerprint,
-                type: key.type
-            )
-        }
+        settingsMessage = "Imported hosts and snippets. Re-import any SSH private keys manually on this device."
     }
 
     private func clearPersistedData() throws {
@@ -362,7 +305,6 @@ struct SettingsView: View {
 private struct SettingsExportPayload: Codable {
     let hosts: [ExportHost]
     let snippets: [Snippet]
-    let keys: [SavedSSHKey]
 }
 
 private struct ExportHost: Codable {
@@ -439,7 +381,6 @@ struct AboutView: View {
                 FeatureRow(icon: "key", text: "Key Management")
                 FeatureRow(icon: "text.badge.plus", text: "Code Snippets")
                 FeatureRow(icon: "icloud", text: "iCloud Sync")
-                FeatureRow(icon: "sparkles", text: "AI Assistant")
             }
             
             Section {

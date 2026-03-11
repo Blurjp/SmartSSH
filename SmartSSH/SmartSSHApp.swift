@@ -184,8 +184,8 @@ private struct UITestSettingsView: View {
                     Text("Timeout")
                 }
 
-                Section("AI Features") {
-                    Text("Upgrade to Pro")
+                Section("Features") {
+                    Text("Snippets")
                 }
             }
             .navigationTitle("Settings")

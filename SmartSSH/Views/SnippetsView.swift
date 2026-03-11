@@ -28,7 +28,6 @@ struct SnippetsView: View {
     @State private var snippets: [Snippet] = []
     @State private var searchText = ""
     @State private var showingAddSnippet = false
-    @State private var showingAISuggestion = false
     
     var filteredSnippets: [Snippet] {
         if searchText.isEmpty {
@@ -78,18 +77,8 @@ struct SnippetsView: View {
 
     private var snippetsToolbar: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Button {
-                    showingAddSnippet = true
-                } label: {
-                    Label("Add Snippet", systemImage: "plus")
-                }
-
-                Button {
-                    showingAISuggestion = true
-                } label: {
-                    Label("AI Generate", systemImage: "sparkles")
-                }
+            Button {
+                showingAddSnippet = true
             } label: {
                 Image(systemName: "plus")
             }
@@ -187,8 +176,6 @@ struct AddSnippetView: View {
     @State private var command = ""
     @State private var description = ""
     @State private var tags = ""
-    @State private var showAIHelp = false
-    
     let onAdd: (Snippet) -> Void
     
     var isValid: Bool {
@@ -208,14 +195,6 @@ struct AddSnippetView: View {
                     TextField("Description (optional)", text: $description)
                     
                     TextField("Tags (comma separated)", text: $tags)
-                }
-                
-                Section {
-                    Button {
-                        showAIHelp = true
-                    } label: {
-                        Label("AI: Help me write this command", systemImage: "sparkles")
-                    }
                 }
             }
             .formStyle(.grouped)

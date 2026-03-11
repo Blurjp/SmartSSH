@@ -47,7 +47,6 @@ enum SubscriptionTier: String, CaseIterable {
             return [
                 "Unlimited Hosts",
                 "iCloud Sync",
-                "AI Features",
                 "SFTP Browser",
                 "Code Snippets",
                 "Priority Support"
@@ -218,7 +217,7 @@ class SubscriptionManager: ObservableObject {
         switch feature {
         case .basicSSH:
             return true // Available to all
-        case .unlimitedHosts, .iCloudSync, .aiFeatures, .sftpBrowser, .snippets:
+        case .unlimitedHosts, .iCloudSync, .sftpBrowser, .snippets:
             return currentTier != .free
         case .teamManagement, .auditLogs, .ssoIntegration:
             return currentTier == .team
@@ -232,7 +231,6 @@ enum Feature {
     case basicSSH
     case unlimitedHosts
     case iCloudSync
-    case aiFeatures
     case sftpBrowser
     case snippets
     case teamManagement

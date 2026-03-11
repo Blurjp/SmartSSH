@@ -63,7 +63,7 @@ struct SubscriptionView: View {
                 .font(.title2)
                 .fontWeight(.bold)
             
-            Text("Get unlimited hosts, AI features, and more")
+            Text("Get unlimited hosts, SFTP access, and more")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -129,7 +129,6 @@ struct SubscriptionView: View {
                 ("Basic SSH", .basicSSH),
                 ("Hosts (Unlimited)", .unlimitedHosts),
                 ("iCloud Sync", .iCloudSync),
-                ("AI Features", .aiFeatures),
                 ("SFTP Browser", .sftpBrowser),
                 ("Code Snippets", .snippets),
                 ("Team Management", .teamManagement),

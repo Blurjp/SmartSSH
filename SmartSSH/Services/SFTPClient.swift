@@ -77,7 +77,7 @@ struct SFTPFile: Identifiable, Hashable {
 class SFTPClient: ObservableObject {
     static let shared = SFTPClient()
 
-    private let unavailableMessage = "Real SFTP is not configured in this build. Add a production SFTP backend before release."
+    private let unavailableMessage = "Connect to a host before starting an SFTP session."
     
     @Published var currentPath: String = "/"
     @Published var files: [SFTPFile] = []

@@ -300,15 +300,6 @@ class SSHManager: ObservableObject {
         KeychainService.shared.getString(forAccount: privateKeyAccount(for: name))
     }
     
-    // MARK: - AI Features
-    
-    func suggestCommand(context: String, completion: @escaping (String) -> Void) {
-        completion("AI suggestions unavailable until a production AI backend is configured.")
-    }
-    
-    func diagnoseError(output: String, completion: @escaping (String) -> Void) {
-        completion("AI diagnosis unavailable until a production AI backend is configured.")
-    }
 }
 
 private extension SSHManager {

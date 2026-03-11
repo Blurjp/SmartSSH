@@ -2,21 +2,21 @@
 //  AIService.swift
 //  SSH Terminal
 //
-//  AI-powered features (command suggestions, error diagnosis)
+//  Reserved for future AI integrations
 //
 
 import Foundation
 
 // MARK: - AI Service
 
+@MainActor
 class AIService: ObservableObject {
     static let shared = AIService()
     
     @Published var isEnabled: Bool = true
     @Published var isProcessing: Bool = false
     
-    private let apiKey: String? = nil
-    private let baseURL = "https://api.openai.com/v1/chat/completions"
+    private init() {}
     
     // MARK: - Command Suggestions
     
@@ -30,14 +30,7 @@ class AIService: ObservableObject {
             return
         }
 
-        guard apiKey != nil else {
-            completion(.failure(.noAPIKey))
-            return
-        }
-        
-        isProcessing = true
-        isProcessing = false
-        completion(.failure(.networkError))
+        completion(.failure(.disabled))
     }
     
     // MARK: - Error Diagnosis
@@ -52,14 +45,7 @@ class AIService: ObservableObject {
             return
         }
 
-        guard apiKey != nil else {
-            completion(.failure(.noAPIKey))
-            return
-        }
-        
-        isProcessing = true
-        isProcessing = false
-        completion(.failure(.networkError))
+        completion(.failure(.disabled))
     }
     
     // MARK: - Command Explanation
@@ -73,14 +59,7 @@ class AIService: ObservableObject {
             return
         }
 
-        guard apiKey != nil else {
-            completion(.failure(.noAPIKey))
-            return
-        }
-        
-        isProcessing = true
-        isProcessing = false
-        completion(.failure(.networkError))
+        completion(.failure(.disabled))
     }
     
     // MARK: - Snippet Generation
@@ -94,14 +73,7 @@ class AIService: ObservableObject {
             return
         }
 
-        guard apiKey != nil else {
-            completion(.failure(.noAPIKey))
-            return
-        }
-        
-        isProcessing = true
-        isProcessing = false
-        completion(.failure(.networkError))
+        completion(.failure(.disabled))
     }
 }
 
@@ -186,40 +158,6 @@ struct AIError: Error {
     let message: String
     
     static let disabled = AIError(message: "AI features are disabled")
-    static let noAPIKey = AIError(message: "OpenAI API key not configured")
-    static let networkError = AIError(message: "Network request failed")
+    static let noAPIKey = AIError(message: "AI backend not configured")
+    static let networkError = AIError(message: "AI request failed")
 }
-
-// MARK: - Real API Implementation (Template)
-
-/*
- Replace simulation with real OpenAI API calls:
- 
- func callOpenAI(prompt: String, completion: @escaping (Result<String, AIError>) -> Void) {
-     guard let apiKey = apiKey else {
-         completion(.failure(.noAPIKey))
-         return
-     }
-     
-     var request = URLRequest(url: URL(string: baseURL)!)
-     request.httpMethod = "POST"
-     request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-     
-     let body: [String: Any] = [
-         "model": "gpt-4",
-         "messages": [
-             ["role": "system", "content": "You are a helpful SSH/Linux expert."],
-             ["role": "user", "content": prompt]
-         ],
-         "temperature": 0.7,
-         "max_tokens": 500
-     ]
-     
-     request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-     
-     URLSession.shared.dataTask(with: request) { data, response, error in
-         // Handle response
-     }.resume()
- }
- */

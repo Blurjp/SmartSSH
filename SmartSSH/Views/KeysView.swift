@@ -14,7 +14,6 @@ import UIKit
 struct KeysView: View {
     @State private var keys: [SavedSSHKey] = []
     @State private var showingGenerateKey = false
-    @State private var showingImportKey = false
     
     var body: some View {
         NavigationStack {
@@ -46,12 +45,6 @@ struct KeysView: View {
                             showingGenerateKey = true
                         } label: {
                             Label("Generate New Key", systemImage: "key.badge.plus")
-                        }
-                        
-                        Button {
-                            showingImportKey = true
-                        } label: {
-                            Label("Import Key", systemImage: "square.and.arrow.down")
                         }
                     } label: {
                         Image(systemName: "plus")
@@ -125,17 +118,15 @@ struct GenerateKeyView: View {
     @State private var keyName = ""
     @State private var keyType = "ed25519"
     @State private var keyComment = ""
-    @State private var passphrase = ""
-    @State private var confirmPassphrase = ""
     @State private var errorMessage = ""
     @State private var showingError = false
     
     let onGenerate: () -> Void
     
-    let keyTypes = ["ed25519", "rsa", "ecdsa"]
+    let keyTypes = ["ed25519"]
     
     var isValid: Bool {
-        !keyName.isEmpty && (passphrase.isEmpty || passphrase == confirmPassphrase)
+        !keyName.isEmpty
     }
     
     var body: some View {
@@ -154,10 +145,10 @@ struct GenerateKeyView: View {
                     TextField("Comment (optional)", text: $keyComment)
                         .textContentType(.emailAddress)
                 }
-                
-                Section("Passphrase (optional)") {
-                    SecureField("Passphrase", text: $passphrase)
-                    SecureField("Confirm Passphrase", text: $confirmPassphrase)
+                Section("Encryption") {
+                    Text("Generated keys are currently saved without a passphrase. Add passphrase support before distributing to untrusted devices.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)
@@ -190,8 +181,7 @@ struct GenerateKeyView: View {
             let result = try SSHManager.shared.generateKeyPair(
                 name: keyName,
                 type: keyType,
-                comment: keyComment.isEmpty ? nil : keyComment,
-                passphrase: passphrase.isEmpty ? nil : passphrase
+                comment: keyComment.isEmpty ? nil : keyComment
             )
         
             SSHManager.shared.saveKey(
@@ -199,8 +189,7 @@ struct GenerateKeyView: View {
                 privateKey: result.privateKey,
                 publicKey: result.publicKey,
                 fingerprint: result.fingerprint,
-                type: keyType,
-                passphrase: passphrase.isEmpty ? nil : passphrase
+                type: keyType
             )
 
             onGenerate()
