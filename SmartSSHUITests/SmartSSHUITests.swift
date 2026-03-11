@@ -19,6 +19,7 @@ final class SmartSSHUITests: XCTestCase {
     }
     
     override func tearDownWithError() throws {
+        app?.terminate()
         app = nil
     }
     
@@ -29,8 +30,8 @@ final class SmartSSHUITests: XCTestCase {
         XCTAssertTrue(app.exists, "App should launch successfully")
         
         // Should show hosts view by default
-        let hostsView = app.navigationBars["Hosts"]
-        XCTAssertTrue(hostsView.waitForExistence(timeout: 5), "Hosts view should be visible")
+        let addButton = app.buttons["hosts.addButton"]
+        XCTAssertTrue(addButton.waitForExistence(timeout: 5), "Hosts view should be visible")
     }
     
     // MARK: - Tab Navigation Tests
@@ -74,13 +75,13 @@ final class SmartSSHUITests: XCTestCase {
     
     func testAddHostButtonExists() throws {
         // Look for add button
-        let addButton = app.navigationBars.buttons["Add"]
+        let addButton = app.buttons["hosts.addButton"]
         XCTAssertTrue(addButton.waitForExistence(timeout: 3), "Add button should exist in Hosts view")
     }
     
     func testAddHostFlow() throws {
         // Tap add button
-        let addButton = app.navigationBars.buttons["Add"]
+        let addButton = app.buttons["hosts.addButton"]
         if addButton.waitForExistence(timeout: 3) {
             addButton.tap()
             
@@ -89,13 +90,13 @@ final class SmartSSHUITests: XCTestCase {
             XCTAssertTrue(addHostView.waitForExistence(timeout: 3), "Add Host view should appear")
             
             // Check for input fields
-            let nameField = app.textFields["Host Name"]
+            let nameField = app.textFields["addHost.name"]
             XCTAssertTrue(nameField.exists, "Name field should exist")
             
-            let hostnameField = app.textFields["Hostname"]
+            let hostnameField = app.textFields["addHost.hostname"]
             XCTAssertTrue(hostnameField.exists, "Hostname field should exist")
             
-            let usernameField = app.textFields["Username"]
+            let usernameField = app.textFields["addHost.username"]
             XCTAssertTrue(usernameField.exists, "Username field should exist")
             
             // Test cancel
@@ -114,8 +115,7 @@ final class SmartSSHUITests: XCTestCase {
     
     func testEmptyHostsState() throws {
         // If no hosts, should show empty state
-        let emptyState = app.staticTexts["No hosts yet"]
-        let addFirstHostButton = app.buttons["Add Your First Host"]
+        let emptyState = app.staticTexts["No Hosts Yet"]
         
         // Either empty state or host list should be visible
         let listExists = app.collectionViews.count > 0 || app.tables.count > 0

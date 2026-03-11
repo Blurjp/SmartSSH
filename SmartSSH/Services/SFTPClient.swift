@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import NMSSH
 
 // MARK: - SFTP File Model
 
@@ -75,6 +76,8 @@ struct SFTPFile: Identifiable, Hashable {
 
 class SFTPClient: ObservableObject {
     static let shared = SFTPClient()
+
+    private let unavailableMessage = "Real SFTP is not configured in this build. Add a production SFTP backend before release."
     
     @Published var currentPath: String = "/"
     @Published var files: [SFTPFile] = []
@@ -89,11 +92,37 @@ class SFTPClient: ObservableObject {
     func listDirectory(_ path: String, completion: @escaping (Result<[SFTPFile], SFTPError>) -> Void) {
         isLoading = true
         currentPath = path
-        
-        // Simulate SFTP listing (replace with real implementation)
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
-            let files = self.simulateListDirectory(path)
-            
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let sftp = self.connectedSFTP() else {
+                DispatchQueue.main.async {
+                    self.files = []
+                    self.isLoading = false
+                    completion(.failure(.connectionFailed(self.unavailableMessage)))
+                }
+                return
+            }
+
+            guard let remoteFiles = sftp.contentsOfDirectory(atPath: path) else {
+                let message = sftp.session.lastError?.localizedDescription ?? "Unable to list directory"
+                DispatchQueue.main.async {
+                    self.files = []
+                    self.isLoading = false
+                    completion(.failure(.operationFailed(message)))
+                }
+                return
+            }
+
+            let files = remoteFiles
+                .filter { $0.filename != "." && $0.filename != ".." }
+                .map { self.makeFile(from: $0, parentPath: path) }
+                .sorted { lhs, rhs in
+                    if lhs.isDirectory != rhs.isDirectory {
+                        return lhs.isDirectory && !rhs.isDirectory
+                    }
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                }
+
             DispatchQueue.main.async {
                 self.files = files
                 self.isLoading = false
@@ -143,101 +172,141 @@ class SFTPClient: ObservableObject {
     // MARK: - File Operations
     
     func downloadFile(_ file: SFTPFile, to localPath: String, completion: @escaping (Result<Void, SFTPError>) -> Void) {
-        // Simulate download
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
-            DispatchQueue.main.async {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let sftp = self.connectedSFTP() else {
+                completion(.failure(.connectionFailed(self.unavailableMessage)))
+                return
+            }
+
+            let data = sftp.contents(atPath: file.path)
+            guard let data else {
+                let message = sftp.session.lastError?.localizedDescription ?? "Unable to download file"
+                completion(.failure(.operationFailed(message)))
+                return
+            }
+
+            do {
+                try data.write(to: URL(fileURLWithPath: localPath), options: .atomic)
                 completion(.success(()))
+            } catch {
+                completion(.failure(.operationFailed(error.localizedDescription)))
             }
         }
     }
     
     func uploadFile(_ localPath: String, to remotePath: String, completion: @escaping (Result<Void, SFTPError>) -> Void) {
-        // Simulate upload
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
-            DispatchQueue.main.async {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let sftp = self.connectedSFTP() else {
+                completion(.failure(.connectionFailed(self.unavailableMessage)))
+                return
+            }
+
+            let success = sftp.writeFile(atPath: localPath, toFileAtPath: remotePath)
+            if success {
                 completion(.success(()))
+            } else {
+                let message = sftp.session.lastError?.localizedDescription ?? "Unable to upload file"
+                completion(.failure(.operationFailed(message)))
             }
         }
     }
     
     func deleteFile(_ file: SFTPFile, completion: @escaping (Result<Void, SFTPError>) -> Void) {
-        // Simulate delete
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let sftp = self.connectedSFTP() else {
+                completion(.failure(.connectionFailed(self.unavailableMessage)))
+                return
+            }
+
+            let success = file.isDirectory
+                ? sftp.removeDirectory(atPath: file.path)
+                : sftp.removeFile(atPath: file.path)
+
             DispatchQueue.main.async {
-                if let index = self.files.firstIndex(where: { $0.id == file.id }) {
-                    self.files.remove(at: index)
+                if success {
+                    self.files.removeAll { $0.path == file.path }
+                    completion(.success(()))
+                } else {
+                    let message = sftp.session.lastError?.localizedDescription ?? "Unable to delete item"
+                    completion(.failure(.operationFailed(message)))
                 }
-                completion(.success(()))
             }
         }
     }
     
     func createDirectory(name: String, completion: @escaping (Result<Void, SFTPError>) -> Void) {
-        // Simulate create directory
-        let newDir = SFTPFile(
-            name: name,
-            path: (currentPath as NSString).appendingPathComponent(name),
-            isDirectory: true,
-            size: 0,
-            modifiedDate: Date(),
-            permissions: "drwxr-xr-x"
-        )
-        
-        DispatchQueue.main.async {
-            self.files.append(newDir)
-            completion(.success(()))
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let sftp = self.connectedSFTP() else {
+                completion(.failure(.connectionFailed(self.unavailableMessage)))
+                return
+            }
+
+            let path = (self.currentPath as NSString).appendingPathComponent(name)
+            let success = sftp.createDirectory(atPath: path)
+
+            DispatchQueue.main.async {
+                if success {
+                    self.listDirectory(self.currentPath) { refreshResult in
+                        switch refreshResult {
+                        case .success:
+                            completion(.success(()))
+                        case .failure(let error):
+                            completion(.failure(error))
+                        }
+                    }
+                } else {
+                    let message = sftp.session.lastError?.localizedDescription ?? "Unable to create directory"
+                    completion(.failure(.operationFailed(message)))
+                }
+            }
         }
     }
     
     func renameFile(_ file: SFTPFile, newName: String, completion: @escaping (Result<Void, SFTPError>) -> Void) {
-        // Simulate rename
-        DispatchQueue.main.async {
-            if let index = self.files.firstIndex(where: { $0.id == file.id }) {
-                let renamedFile = SFTPFile(
-                    name: newName,
-                    path: (file.path as NSString).deletingLastPathComponent + "/" + newName,
-                    isDirectory: file.isDirectory,
-                    size: file.size,
-                    modifiedDate: Date(),
-                    permissions: file.permissions
-                )
-                self.files[index] = renamedFile
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let sftp = self.connectedSFTP() else {
+                completion(.failure(.connectionFailed(self.unavailableMessage)))
+                return
             }
-            completion(.success(()))
+
+            let destination = ((file.path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(newName)
+            let success = sftp.moveItem(atPath: file.path, toPath: destination)
+
+            DispatchQueue.main.async {
+                if success {
+                    self.listDirectory(self.currentPath) { refreshResult in
+                        switch refreshResult {
+                        case .success:
+                            completion(.success(()))
+                        case .failure(let error):
+                            completion(.failure(error))
+                        }
+                    }
+                } else {
+                    let message = sftp.session.lastError?.localizedDescription ?? "Unable to rename item"
+                    completion(.failure(.operationFailed(message)))
+                }
+            }
         }
     }
-    
-    // MARK: - Simulation
-    
-    private func simulateListDirectory(_ path: String) -> [SFTPFile] {
-        // Generate realistic-looking files
-        var files: [SFTPFile] = []
-        
-        let commonFiles = [
-            ("README.md", false, 2048),
-            ("config.yml", false, 512),
-            ("src", true, 0),
-            ("docs", true, 0),
-            ("package.json", false, 1024),
-            (".gitignore", false, 128),
-            ("app.py", false, 4096),
-            ("requirements.txt", false, 256),
-            ("data", true, 0),
-            ("logs", true, 0),
-        ]
-        
-        for (name, isDir, size) in commonFiles {
-            files.append(SFTPFile(
-                name: name,
-                path: (path as NSString).appendingPathComponent(name),
-                isDirectory: isDir,
-                size: Int64(size),
-                modifiedDate: Date().addingTimeInterval(-Double.random(in: 0...86400 * 30)),
-                permissions: isDir ? "drwxr-xr-x" : "-rw-r--r--"
-            ))
-        }
-        
-        return files.sorted { $0.name < $1.name }
+
+    private func connectedSFTP() -> NMSFTP? {
+        guard let session = SSHClient.shared.activeSession else { return nil }
+        let sftp = session.sftp
+        if sftp.isConnected { return sftp }
+        return sftp.connect() ? sftp : nil
+    }
+
+    private func makeFile(from remoteFile: NMSFTPFile, parentPath: String) -> SFTPFile {
+        let path = (parentPath as NSString).appendingPathComponent(remoteFile.filename)
+        return SFTPFile(
+            name: remoteFile.filename,
+            path: path,
+            isDirectory: remoteFile.isDirectory,
+            size: remoteFile.fileSize?.int64Value ?? 0,
+            modifiedDate: remoteFile.modificationDate ?? Date(),
+            permissions: remoteFile.permissions ?? "----------"
+        )
     }
 }
 

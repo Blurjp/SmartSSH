@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CoreData
 
 struct SettingsView: View {
     @AppStorage("terminalFontSize") private var terminalFontSize = 14.0
@@ -18,6 +19,10 @@ struct SettingsView: View {
     
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showingSubscription = false
+    @State private var settingsMessage = ""
+    @State private var showingSettingsMessage = false
+
+    @Environment(\.managedObjectContext) private var viewContext
     
     var body: some View {
         NavigationView {
@@ -43,6 +48,11 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .sheet(isPresented: $showingSubscription) {
                 SubscriptionView()
+            }
+            .alert("Settings", isPresented: $showingSettingsMessage) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(settingsMessage)
             }
         }
     }
@@ -226,19 +236,144 @@ struct SettingsView: View {
     // MARK: - Actions
     
     private func exportData() {
-        // Export data logic
-        print("Exporting data...")
+        do {
+            let payload = try makeExportPayload()
+            let data = try JSONEncoder().encode(payload)
+            try data.write(to: exportURL(), options: .atomic)
+            settingsMessage = "Exported app data to \(exportURL().lastPathComponent)."
+        } catch {
+            settingsMessage = "Export failed: \(error.localizedDescription)"
+        }
+
+        showingSettingsMessage = true
     }
     
     private func importData() {
-        // Import data logic
-        print("Importing data...")
+        do {
+            let data = try Data(contentsOf: exportURL())
+            let payload = try JSONDecoder().decode(SettingsExportPayload.self, from: data)
+            try restore(from: payload)
+            settingsMessage = "Imported app data from \(exportURL().lastPathComponent)."
+        } catch {
+            settingsMessage = "Import failed: \(error.localizedDescription)"
+        }
+
+        showingSettingsMessage = true
     }
     
     private func clearAllData() {
-        // Clear data logic
-        print("Clearing all data...")
+        do {
+            try clearPersistedData()
+            settingsMessage = "Cleared hosts, keys, and saved snippets."
+        } catch {
+            settingsMessage = "Clear failed: \(error.localizedDescription)"
+        }
+
+        showingSettingsMessage = true
     }
+
+    private func exportURL() -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("smartssh-export.json")
+    }
+
+    private func makeExportPayload() throws -> SettingsExportPayload {
+        let request = Host.fetchRequest()
+        let hosts = try viewContext.fetch(request).map { host in
+            ExportHost(
+                name: host.wrappedName,
+                hostname: host.wrappedHostname,
+                port: host.port,
+                username: host.wrappedUsername,
+                keyFingerprint: host.keyFingerprint,
+                group: host.group,
+                tags: host.tags,
+                useKeyAuth: host.useKeyAuth
+            )
+        }
+
+        let snippets = loadSavedSnippets()
+        let keys = SSHManager.shared.loadSavedKeys()
+
+        return SettingsExportPayload(hosts: hosts, snippets: snippets, keys: keys)
+    }
+
+    private func restore(from payload: SettingsExportPayload) throws {
+        try clearPersistedData()
+
+        for host in payload.hosts {
+            _ = Host.create(
+                in: viewContext,
+                name: host.name,
+                hostname: host.hostname,
+                port: host.port,
+                username: host.username,
+                keyFingerprint: host.keyFingerprint,
+                group: host.group,
+                tags: host.tags,
+                useKeyAuth: host.useKeyAuth
+            )
+        }
+
+        try viewContext.save()
+
+        if let snippetsData = try? JSONEncoder().encode(payload.snippets) {
+            UserDefaults.standard.set(snippetsData, forKey: "saved_snippets")
+        }
+
+        let existingKeyNames = Set(SSHManager.shared.loadSavedKeys().map(\.name))
+        for key in payload.keys where !existingKeyNames.contains(key.name) {
+            SSHManager.shared.saveKey(
+                name: key.name,
+                privateKey: "UNAVAILABLE",
+                publicKey: key.publicKey,
+                fingerprint: key.fingerprint,
+                type: key.type
+            )
+        }
+    }
+
+    private func clearPersistedData() throws {
+        let request = Host.fetchRequest()
+        let hosts = try viewContext.fetch(request)
+        for host in hosts {
+            host.deletePassword()
+            viewContext.delete(host)
+        }
+        try viewContext.save()
+
+        for key in SSHManager.shared.loadSavedKeys() {
+            SSHManager.shared.deleteKey(named: key.name)
+        }
+
+        UserDefaults.standard.removeObject(forKey: "saved_snippets")
+    }
+
+    private func loadSavedSnippets() -> [Snippet] {
+        guard let data = UserDefaults.standard.data(forKey: "saved_snippets"),
+              let snippets = try? JSONDecoder().decode([Snippet].self, from: data) else {
+            return []
+        }
+
+        return snippets
+    }
+}
+
+private struct SettingsExportPayload: Codable {
+    let hosts: [ExportHost]
+    let snippets: [Snippet]
+    let keys: [SavedSSHKey]
+}
+
+private struct ExportHost: Codable {
+    let name: String
+    let hostname: String
+    let port: Int16
+    let username: String
+    let keyFingerprint: String?
+    let group: String?
+    let tags: [String]?
+    let useKeyAuth: Bool
 }
 
 // MARK: - Feature Row

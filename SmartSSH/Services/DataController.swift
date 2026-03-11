@@ -13,14 +13,20 @@ class DataController: ObservableObject {
     
     let container: NSPersistentCloudKitContainer
     
-    init() {
+    init(inMemory: Bool = false, cloudSyncEnabled: Bool = true) {
         container = NSPersistentCloudKitContainer(name: "SmartSSH")
-        
-        // Enable iCloud sync
-        container.persistentStoreDescriptions.first?.setOption(
-            true as NSNumber,
-            forKey: NSPersistentHistoryTrackingKey
-        )
+
+        if let description = container.persistentStoreDescriptions.first {
+            if inMemory {
+                description.url = URL(fileURLWithPath: "/dev/null")
+            }
+
+            description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+
+            if !cloudSyncEnabled {
+                description.cloudKitContainerOptions = nil
+            }
+        }
         
         container.loadPersistentStores { description, error in
             if let error = error {

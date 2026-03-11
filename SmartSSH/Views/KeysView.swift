@@ -7,17 +7,12 @@
 
 import SwiftUI
 
-struct SSHKey: Identifiable {
-    let id = UUID()
-    let name: String
-    let type: String
-    let fingerprint: String
-    let createdAt: Date
-    let publicKey: String
-}
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct KeysView: View {
-    @State private var keys: [SSHKey] = []
+    @State private var keys: [SavedSSHKey] = []
     @State private var showingGenerateKey = false
     @State private var showingImportKey = false
     
@@ -64,10 +59,11 @@ struct KeysView: View {
                 }
             }
             .sheet(isPresented: $showingGenerateKey) {
-                GenerateKeyView { key in
-                    keys.append(key)
+                GenerateKeyView {
+                    loadKeys()
                 }
             }
+            .onAppear(perform: loadKeys)
             .overlay {
                 if keys.isEmpty {
                     ContentUnavailableView(
@@ -80,18 +76,22 @@ struct KeysView: View {
         }
     }
     
-    private func deleteKey(_ key: SSHKey) {
-        keys.removeAll { $0.id == key.id }
-        // TODO: Delete from Keychain
+    private func deleteKey(_ key: SavedSSHKey) {
+        SSHManager.shared.deleteKey(named: key.name)
+        loadKeys()
     }
     
-    private func copyPublicKey(_ key: SSHKey) {
+    private func copyPublicKey(_ key: SavedSSHKey) {
         UIPasteboard.general.string = key.publicKey
+    }
+
+    private func loadKeys() {
+        keys = SSHManager.shared.loadSavedKeys()
     }
 }
 
 struct KeyRowView: View {
-    let key: SSHKey
+    let key: SavedSSHKey
     
     var body: some View {
         HStack {
@@ -127,8 +127,10 @@ struct GenerateKeyView: View {
     @State private var keyComment = ""
     @State private var passphrase = ""
     @State private var confirmPassphrase = ""
+    @State private var errorMessage = ""
+    @State private var showingError = false
     
-    let onGenerate: (SSHKey) -> Void
+    let onGenerate: () -> Void
     
     let keyTypes = ["ed25519", "rsa", "ecdsa"]
     
@@ -175,35 +177,38 @@ struct GenerateKeyView: View {
                     .disabled(!isValid)
                 }
             }
+            .alert("Unable to Generate Key", isPresented: $showingError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
         }
     }
     
     private func generateKey() {
-        let result = SSHManager.shared.generateKeyPair(
-            name: keyName,
-            type: keyType,
-            comment: keyComment.isEmpty ? nil : keyComment
-        )
+        do {
+            let result = try SSHManager.shared.generateKeyPair(
+                name: keyName,
+                type: keyType,
+                comment: keyComment.isEmpty ? nil : keyComment,
+                passphrase: passphrase.isEmpty ? nil : passphrase
+            )
         
-        let key = SSHKey(
-            name: keyName,
-            type: keyType.uppercased(),
-            fingerprint: result.fingerprint,
-            createdAt: Date(),
-            publicKey: result.publicKey
-        )
-        
-        // Save to Keychain
-        SSHManager.shared.saveKey(
-            name: keyName,
-            privateKey: result.privateKey,
-            publicKey: result.publicKey,
-            fingerprint: result.fingerprint,
-            passphrase: passphrase.isEmpty ? nil : passphrase
-        )
-        
-        onGenerate(key)
-        dismiss()
+            SSHManager.shared.saveKey(
+                name: keyName,
+                privateKey: result.privateKey,
+                publicKey: result.publicKey,
+                fingerprint: result.fingerprint,
+                type: keyType,
+                passphrase: passphrase.isEmpty ? nil : passphrase
+            )
+
+            onGenerate()
+            dismiss()
+        } catch {
+            errorMessage = (error as? SSHError)?.localizedDescription ?? error.localizedDescription
+            showingError = true
+        }
     }
 }
 

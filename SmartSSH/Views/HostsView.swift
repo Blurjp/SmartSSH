@@ -8,6 +8,10 @@
 import SwiftUI
 import CoreData
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 struct HostsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @FetchRequest(
@@ -67,6 +71,7 @@ struct HostsView: View {
             }
             .searchable(text: $searchText, prompt: "Search hosts...")
             .navigationTitle("Hosts")
+            .accessibilityIdentifier("hosts.screen")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     addButton
@@ -94,6 +99,7 @@ struct HostsView: View {
             Text("No Hosts Yet")
                 .font(.title2)
                 .fontWeight(.semibold)
+                .accessibilityIdentifier("hosts.emptyTitle")
             
             Text("Add your first SSH server to get started.")
                 .font(.body)
@@ -107,6 +113,7 @@ struct HostsView: View {
                     .font(.headline)
             }
             .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("hosts.addButton")
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
@@ -184,6 +191,7 @@ struct HostsView: View {
         } label: {
             Label("Add Host", systemImage: "plus")
         }
+        .accessibilityIdentifier("hosts.addButton")
     }
     
     // MARK: - Actions
@@ -209,6 +217,7 @@ struct HostsView: View {
     
     private func deleteHost(_ host: Host) {
         withAnimation {
+            host.deletePassword()
             viewContext.delete(host)
             do {
                 try viewContext.save()

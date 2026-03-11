@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 struct TerminalView: View {
     @StateObject private var sshClient = SSHClient.shared
     @State private var commandInput = ""
@@ -91,6 +95,10 @@ struct TerminalView: View {
                             .foregroundStyle(.green)
                             .textSelection(.enabled)
                     }
+
+                    Color.clear
+                        .frame(height: 1)
+                        .id("bottom")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()

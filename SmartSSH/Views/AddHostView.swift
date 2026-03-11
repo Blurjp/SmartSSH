@@ -25,6 +25,7 @@ struct AddHostView: View {
     @State private var showingError = false
     @State private var errorMessage = ""
     @State private var showingSuccess = false
+    @State private var availableKeys: [SavedSSHKey] = []
     
     @FocusState private var focusedField: Field?
     
@@ -35,7 +36,7 @@ struct AddHostView: View {
     let colors = ["blue", "green", "orange", "purple", "red", "pink", "yellow", "gray"]
     
     var isValid: Bool {
-        !name.isEmpty && !hostname.isEmpty && !username.isEmpty
+        !name.isEmpty && !hostname.isEmpty && !username.isEmpty && (!useKeyAuth || !selectedKey.isEmpty)
     }
     
     var body: some View {
@@ -74,6 +75,7 @@ struct AddHostView: View {
             } message: {
                 Text("Connection test successful!")
             }
+            .onAppear(perform: loadKeys)
         }
     }
     
@@ -89,6 +91,7 @@ struct AddHostView: View {
                 
                 TextField("Name", text: $name)
                     .textContentType(.name)
+                    .accessibilityIdentifier("addHost.name")
                     .focused($focusedField, equals: .name)
                     .onAppear {
                         focusedField = .name
@@ -106,6 +109,7 @@ struct AddHostView: View {
                     .keyboardType(.URL)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
+                    .accessibilityIdentifier("addHost.hostname")
                     .focused($focusedField, equals: .hostname)
             }
             
@@ -136,6 +140,7 @@ struct AddHostView: View {
                     .textContentType(.username)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
+                    .accessibilityIdentifier("addHost.username")
                     .focused($focusedField, equals: .username)
             }
         } header: {
@@ -151,8 +156,9 @@ struct AddHostView: View {
             if useKeyAuth {
                 Picker("SSH Key", selection: $selectedKey) {
                     Text("Select a key...").tag("")
-                    Text("id_ed25519").tag("id_ed25519")
-                    Text("id_rsa").tag("id_rsa")
+                    ForEach(availableKeys) { key in
+                        Text(key.name).tag(key.name)
+                    }
                 }
             } else {
                 HStack {
@@ -162,6 +168,7 @@ struct AddHostView: View {
                     
                     SecureField("Password", text: $password)
                         .textContentType(.password)
+                        .accessibilityIdentifier("addHost.password")
                         .focused($focusedField, equals: .password)
                 }
             }
@@ -249,11 +256,13 @@ struct AddHostView: View {
             case .success:
                 showingSuccess = true
                 SSHClient.shared.disconnect()
+                tempHost.deletePassword()
                 viewContext.delete(tempHost)
-                
+                 
             case .failure(let error):
                 errorMessage = error.localizedDescription
                 showingError = true
+                tempHost.deletePassword()
                 viewContext.delete(tempHost)
             }
         }
@@ -278,6 +287,13 @@ struct AddHostView: View {
         } catch {
             errorMessage = error.localizedDescription
             showingError = true
+        }
+    }
+
+    private func loadKeys() {
+        availableKeys = SSHManager.shared.loadSavedKeys()
+        if !availableKeys.contains(where: { $0.name == selectedKey }) {
+            selectedKey = ""
         }
     }
 }

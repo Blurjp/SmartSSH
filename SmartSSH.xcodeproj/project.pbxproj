@@ -13,6 +13,7 @@
 		0F42184394A4A5EE54150207 /* SubscriptionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76C875BE29D9ECC5ECEBCEC3 /* SubscriptionManager.swift */; };
 		124ED5A2B66CF2EED5EFE04A /* SmartSSH.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 581E166A916CCDB6351564D8 /* SmartSSH.xcdatamodeld */; };
 		1718DDF3657C1AB8EDDC2FFE /* SSHManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 486A81497D7085CBCE3092DC /* SSHManager.swift */; };
+		2D43C36C86F919E2E36C4ED4 /* Pods_SmartSSH.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B767AB99EB817F078F4A7820 /* Pods_SmartSSH.framework */; };
 		5159CB75FB583358F1DE0476 /* SFTPView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C677A7B6AD248F8139D75C07 /* SFTPView.swift */; };
 		5338B4A58AB3619CAB421E6F /* QuickActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC8D88FAA8117FDC65DD423 /* QuickActions.swift */; };
 		5803786DB31E32FD3C42A636 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4380E1DFB2DBBCE87D80A4F5 /* Assets.xcassets */; };
@@ -55,20 +56,34 @@
 		76C875BE29D9ECC5ECEBCEC3 /* SubscriptionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionManager.swift; sourceTree = "<group>"; };
 		787BCE4879DBAC889A25DBDE /* KeysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeysView.swift; sourceTree = "<group>"; };
 		7FC07013A08CD577CDDEA223 /* SmartSSHUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SmartSSHUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		90293ECD5EE99B4E2ACCADE7 /* Pods-SmartSSH.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SmartSSH.debug.xcconfig"; path = "Target Support Files/Pods-SmartSSH/Pods-SmartSSH.debug.xcconfig"; sourceTree = "<group>"; };
 		A59D54CCC923C3743FC44314 /* SmartSSHApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartSSHApp.swift; sourceTree = "<group>"; };
 		A9150627FAC9148979D4104F /* AIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIService.swift; sourceTree = "<group>"; };
 		AA1B42F8E7D2541A8E925604 /* AddHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddHostView.swift; sourceTree = "<group>"; };
 		AFA84B28150C48FABC4D3A7B /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		B43EC0028BD62D8D45F4B388 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		B767AB99EB817F078F4A7820 /* Pods_SmartSSH.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_SmartSSH.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7F93CA652D810BC204AB70E /* SmartSSHUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartSSHUITests.swift; sourceTree = "<group>"; };
 		BD628CF966BE60A9B6C3EE3C /* SmartSSH.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SmartSSH.entitlements; sourceTree = "<group>"; };
 		C4CD41535775A0408DD270A7 /* SmartSSH.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SmartSSH.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C677A7B6AD248F8139D75C07 /* SFTPView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTPView.swift; sourceTree = "<group>"; };
+		DD4C217B9DADED78178B2378 /* Pods-SmartSSH.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SmartSSH.release.xcconfig"; path = "Target Support Files/Pods-SmartSSH/Pods-SmartSSH.release.xcconfig"; sourceTree = "<group>"; };
 		E17170E69DE9D857F586A051 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		E2B9C6ADCE204DE387906D8A /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		EE03D49CAE0F42A600354157 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F2BA0AE0890F6559685100C6 /* SFTPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTPClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B01630C8DCFCB75FF95BC934 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2D43C36C86F919E2E36C4ED4 /* Pods_SmartSSH.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		013944B4CB6106100F850897 /* ViewModels */ = {
@@ -108,6 +123,8 @@
 				C6BF868A7C5DDC1BD5A12B0A /* SmartSSH */,
 				0896D94ADE82DD1B9666E419 /* SmartSSHUITests */,
 				4BAA6454198BA635BF121E15 /* Products */,
+				B2C07CEC236C1E57B552C634 /* Pods */,
+				ACD1B67AA3491F0F91850049 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -150,6 +167,24 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		ACD1B67AA3491F0F91850049 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				B767AB99EB817F078F4A7820 /* Pods_SmartSSH.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		B2C07CEC236C1E57B552C634 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				90293ECD5EE99B4E2ACCADE7 /* Pods-SmartSSH.debug.xcconfig */,
+				DD4C217B9DADED78178B2378 /* Pods-SmartSSH.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		C6BF868A7C5DDC1BD5A12B0A /* SmartSSH */ = {
 			isa = PBXGroup;
 			children = (
@@ -182,8 +217,6 @@
 				565141F771167757955A3F28 /* PBXTargetDependency */,
 			);
 			name = SmartSSHUITests;
-			packageProductDependencies = (
-			);
 			productName = SmartSSHUITests;
 			productReference = 7FC07013A08CD577CDDEA223 /* SmartSSHUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -192,16 +225,17 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E3D381C7DBE00F751DAD641E /* Build configuration list for PBXNativeTarget "SmartSSH" */;
 			buildPhases = (
+				4AB352B6083CB2273E8DEA0F /* [CP] Check Pods Manifest.lock */,
 				A1E29C80D23D13CB7B9809B7 /* Sources */,
 				9D960105CC7826B241F38F98 /* Resources */,
+				B01630C8DCFCB75FF95BC934 /* Frameworks */,
+				3653D07E6E68A28D12FD0E00 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			name = SmartSSH;
-			packageProductDependencies = (
-			);
 			productName = SmartSSH;
 			productReference = C4CD41535775A0408DD270A7 /* SmartSSH.app */;
 			productType = "com.apple.product-type.application";
@@ -235,6 +269,7 @@
 			mainGroup = 376503470C8EBD84655F6ED0;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 4BAA6454198BA635BF121E15 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -254,6 +289,48 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		3653D07E6E68A28D12FD0E00 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-SmartSSH/Pods-SmartSSH-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-SmartSSH/Pods-SmartSSH-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-SmartSSH/Pods-SmartSSH-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		4AB352B6083CB2273E8DEA0F /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-SmartSSH-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		71F48E0172AE3AF80400DBAA /* Sources */ = {
@@ -304,6 +381,7 @@
 /* Begin XCBuildConfiguration section */
 		38805AD4BFBB4DFC659EE30D /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 90293ECD5EE99B4E2ACCADE7 /* Pods-SmartSSH.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -311,6 +389,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				INFOPLIST_FILE = SmartSSH/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SmartSSH;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -332,6 +411,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -415,6 +495,7 @@
 		};
 		7A9D2BD595BB1F96873AB854 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = DD4C217B9DADED78178B2378 /* Pods-SmartSSH.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -422,6 +503,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				INFOPLIST_FILE = SmartSSH/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SmartSSH;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -443,6 +525,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

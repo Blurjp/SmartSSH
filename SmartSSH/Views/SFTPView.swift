@@ -6,6 +6,11 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
+
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct SFTPView: View {
     @StateObject private var sftpClient = SFTPClient.shared
@@ -13,8 +18,12 @@ struct SFTPView: View {
     @State private var showingFileActions = false
     @State private var showingCreateDirectory = false
     @State private var showingUploadSheet = false
+    @State private var showingRenameSheet = false
     @State private var newDirectoryName = ""
+    @State private var renamedFileName = ""
     @State private var searchText = ""
+    @State private var alertMessage = ""
+    @State private var showingAlert = false
     
     var filteredFiles: [SFTPFile] {
         if searchText.isEmpty {
@@ -71,10 +80,30 @@ struct SFTPView: View {
             .sheet(isPresented: $showingCreateDirectory) {
                 createDirectorySheet
             }
+            .sheet(isPresented: $showingRenameSheet) {
+                renameFileSheet
+            }
             .confirmationDialog("File Actions", isPresented: $showingFileActions, presenting: selectedFile) { file in
                 fileActionsSheet(file: file)
             }
+            .fileImporter(isPresented: $showingUploadSheet, allowedContentTypes: [.item]) { result in
+                handleUploadSelection(result)
+            }
+            .alert("Files", isPresented: $showingAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(alertMessage)
+            }
+            .onAppear {
+                if sshConnected {
+                    refreshList()
+                }
+            }
         }
+    }
+
+    private var sshConnected: Bool {
+        SSHClient.shared.isConnected
     }
     
     // MARK: - View Components
@@ -124,6 +153,8 @@ struct SFTPView: View {
             if sftpClient.isLoading {
                 ProgressView("Loading...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if !sshConnected {
+                disconnectedStateView
             } else if filteredFiles.isEmpty {
                 emptyStateView
             } else {
@@ -164,6 +195,14 @@ struct SFTPView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var disconnectedStateView: some View {
+        ContentUnavailableView {
+            Label("No Active SFTP Session", systemImage: "folder")
+        } description: {
+            Text("Connect to a host in the Terminal tab before browsing files.")
+        }
     }
     
     private var toolbar: some View {
@@ -210,7 +249,7 @@ struct SFTPView: View {
             Form {
                 Section {
                     TextField("Folder Name", text: $newDirectoryName)
-                        .autocapitalization(.none)
+                        .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
                     Text("New Folder")
@@ -238,6 +277,34 @@ struct SFTPView: View {
         }
         .presentationDetents([.medium])
     }
+
+    private var renameFileSheet: some View {
+        NavigationStack {
+            Form {
+                TextField("New Name", text: $renamedFileName)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+            .navigationTitle("Rename")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showingRenameSheet = false
+                        renamedFileName = ""
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        renameSelectedFile()
+                    }
+                    .disabled(renamedFileName.isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
     
     @ViewBuilder
     private func fileActionsSheet(file: SFTPFile) -> some View {
@@ -259,7 +326,9 @@ struct SFTPView: View {
             }
             
             Button {
-                // Rename
+                renamedFileName = file.name
+                selectedFile = file
+                showingRenameSheet = true
                 showingFileActions = false
             } label: {
                 Label("Rename", systemImage: "pencil")
@@ -316,6 +385,7 @@ struct SFTPView: View {
     }
     
     private func refreshList() {
+        guard sshConnected else { return }
         sftpClient.listDirectory(sftpClient.currentPath) { _ in }
     }
     
@@ -328,14 +398,23 @@ struct SFTPView: View {
                 newDirectoryName = ""
                 showingCreateDirectory = false
             case .failure(let error):
-                print("Failed to create directory: \(error)")
+                showAlert(error.localizedDescription)
             }
         }
     }
     
     private func downloadFile(_ file: SFTPFile) {
-        // TODO: Implement download with progress
-        print("Downloading: \(file.name)")
+        let destination = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(file.name)
+
+        sftpClient.downloadFile(file, to: destination.path) { result in
+            switch result {
+            case .success:
+                showAlert("Downloaded \(file.name) to Files/Documents.")
+            case .failure(let error):
+                showAlert(error.localizedDescription)
+            }
+        }
     }
     
     private func deleteFile(_ file: SFTPFile) {
@@ -344,9 +423,59 @@ struct SFTPView: View {
             case .success:
                 break
             case .failure(let error):
-                print("Failed to delete: \(error)")
+                showAlert(error.localizedDescription)
             }
         }
+    }
+
+    private func renameSelectedFile() {
+        guard let file = selectedFile, !renamedFileName.isEmpty else { return }
+
+        sftpClient.renameFile(file, newName: renamedFileName) { result in
+            switch result {
+            case .success:
+                showingRenameSheet = false
+                renamedFileName = ""
+                selectedFile = nil
+            case .failure(let error):
+                showAlert(error.localizedDescription)
+            }
+        }
+    }
+
+    private func handleUploadSelection(_ result: Result<URL, Error>) {
+        guard sshConnected else {
+            showAlert("Connect to a host before uploading files.")
+            return
+        }
+
+        switch result {
+        case .success(let url):
+            let accessGranted = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessGranted {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            let remotePath = (sftpClient.currentPath as NSString).appendingPathComponent(url.lastPathComponent)
+            sftpClient.uploadFile(url.path, to: remotePath) { uploadResult in
+                switch uploadResult {
+                case .success:
+                    refreshList()
+                    showAlert("Uploaded \(url.lastPathComponent).")
+                case .failure(let error):
+                    showAlert(error.localizedDescription)
+                }
+            }
+        case .failure(let error):
+            showAlert(error.localizedDescription)
+        }
+    }
+
+    private func showAlert(_ message: String) {
+        alertMessage = message
+        showingAlert = true
     }
 }
 

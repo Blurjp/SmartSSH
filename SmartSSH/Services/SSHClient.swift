@@ -9,6 +9,7 @@
 import Foundation
 import Network
 import CryptoKit
+import NMSSH
 
 // MARK: - SSH Connection States
 
@@ -42,6 +43,8 @@ enum SSHConnectionState {
 
 class SSHClient: ObservableObject {
     static let shared = SSHClient()
+
+    private let unavailableMessage = "Real SSH transport is not configured in this build. Add a production SSH backend before release."
     
     // MARK: - Properties
     
@@ -49,9 +52,14 @@ class SSHClient: ObservableObject {
     @Published var output: String = ""
     @Published var isConnected: Bool = false
     
-    private var session: Any? // NMSSHSession in production
+    private var session: NMSSHSession?
     var host: Host?
     private var outputQueue = DispatchQueue(label: "com.smartssh.output")
+
+    var activeSession: NMSSHSession? {
+        guard let session, session.isConnected, session.isAuthorized else { return nil }
+        return session
+    }
     
     // MARK: - Connection
     
@@ -60,6 +68,18 @@ class SSHClient: ObservableObject {
         timeout: TimeInterval = 30,
         completion: @escaping (Result<Void, SSHError>) -> Void
     ) {
+        let hostname = host.wrappedHostname
+        let username = host.wrappedUsername
+        let password = host.password
+        let keyName = host.keyFingerprint
+        let publicKey = SSHManager.shared.loadSavedKeys().first(where: { $0.name == keyName })?.publicKey
+        let privateKey: String?
+        if let keyName {
+            privateKey = SSHManager.shared.privateKey(named: keyName)
+        } else {
+            privateKey = nil
+        }
+
         self.host = host
         
         DispatchQueue.main.async {
@@ -68,27 +88,100 @@ class SSHClient: ObservableObject {
         }
         
         // Validate host configuration
-        guard !host.wrappedHostname.isEmpty else {
+        guard !hostname.isEmpty, !username.isEmpty else {
             DispatchQueue.main.async {
                 self.state = .error("Invalid hostname")
             }
             completion(.failure(.invalidHost))
             return
         }
-        
-        // Simulate connection (replace with NMSSH in production)
-        simulateConnection(to: host, completion: completion)
+
+        disconnect()
+        appendOutput("Connecting to \(hostname)...\n")
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let session = NMSSHSession(host: hostname, port: Int(host.port), andUsername: username)
+            session.timeout = NSNumber(value: timeout)
+
+            guard session.connect(), session.isConnected else {
+                let message = session.lastError?.localizedDescription ?? "Unable to connect"
+                DispatchQueue.main.async {
+                    self.state = .error(message)
+                    self.isConnected = false
+                }
+                completion(.failure(.connectionFailed(message)))
+                return
+            }
+
+            DispatchQueue.main.async {
+                self.state = .authenticating
+            }
+            self.appendOutput("Authenticating as \(username)...\n")
+
+            let authorized: Bool
+            if host.useKeyAuth {
+                guard let publicKey, let privateKey else {
+                    session.disconnect()
+                    let message = "Missing SSH key material for \(keyName ?? "selected key")"
+                    DispatchQueue.main.async {
+                        self.state = .error(message)
+                        self.isConnected = false
+                    }
+                    completion(.failure(.authenticationFailed(message)))
+                    return
+                }
+
+                authorized = session.authenticateBy(inMemoryPublicKey: publicKey, privateKey: privateKey, andPassword: nil)
+            } else if let password, !password.isEmpty {
+                authorized = session.authenticate(byPassword: password)
+            } else {
+                session.disconnect()
+                let message = "No authentication method configured"
+                DispatchQueue.main.async {
+                    self.state = .error(message)
+                    self.isConnected = false
+                }
+                completion(.failure(.authenticationFailed(message)))
+                return
+            }
+
+            guard authorized, session.isAuthorized else {
+                let message = session.lastError?.localizedDescription ?? "Authentication failed"
+                session.disconnect()
+                DispatchQueue.main.async {
+                    self.state = .error(message)
+                    self.isConnected = false
+                }
+                completion(.failure(.authenticationFailed(message)))
+                return
+            }
+
+            session.channel.requestPty = true
+
+            DispatchQueue.main.async {
+                self.session = session
+                self.state = .connected
+                self.isConnected = true
+                self.appendOutput("Connected!\n\n")
+                completion(.success(()))
+            }
+        }
     }
     
     func disconnect() {
+        let hadSession = session != nil || isConnected
+
         // Cleanup session
+        session?.disconnect()
         session = nil
         host = nil
         
         DispatchQueue.main.async {
             self.state = .disconnected
             self.isConnected = false
-            self.output.append("\nDisconnected.\n")
+            if hadSession {
+                self.output.append("\nDisconnected.\n")
+            }
         }
     }
     
@@ -102,12 +195,31 @@ class SSHClient: ObservableObject {
             completion(.failure(.connectionFailed("Not connected")))
             return
         }
-        
-        // Add command to output
+
+        guard let session = activeSession else {
+            completion(.failure(.connectionFailed("Session unavailable")))
+            return
+        }
+
         appendOutput("$ \(command)\n")
-        
-        // Simulate command execution
-        simulateCommand(command: command, completion: completion)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            var error: NSError?
+            let response = session.channel.execute(command, error: &error, timeout: 30)
+
+            if let error {
+                let message = error.localizedDescription
+                self.appendOutput("\(message)\n")
+                completion(.failure(.commandFailed(message)))
+                return
+            }
+
+            let output = response ?? ""
+            if !output.isEmpty {
+                self.appendOutput(output.hasSuffix("\n") ? output : output + "\n")
+            }
+            completion(.success(output))
+        }
     }
     
     // MARK: - Output Handling
@@ -124,81 +236,6 @@ class SSHClient: ObservableObject {
         }
     }
     
-    // MARK: - Simulation (Replace with NMSSH)
-    
-    private func simulateConnection(
-        to host: Host,
-        completion: @escaping (Result<Void, SSHError>) -> Void
-    ) {
-        appendOutput("Connecting to \(host.wrappedHostname)...\n")
-        
-        // Simulate connection delay
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
-            DispatchQueue.main.async {
-                self.state = .authenticating
-            }
-            self.appendOutput("Authenticating as \(host.wrappedUsername)...\n")
-        }
-        
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
-            // Simulate successful connection
-            DispatchQueue.main.async {
-                self.state = .connected
-                self.isConnected = true
-                self.appendOutput("Connected!\n\n")
-                completion(.success(()))
-            }
-        }
-    }
-    
-    private func simulateCommand(
-        command: String,
-        completion: @escaping (Result<String, SSHError>) -> Void
-    ) {
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) {
-            // Simulate command output
-            let output = self.generateSimulatedOutput(for: command)
-            self.appendOutput(output)
-            completion(.success(output))
-        }
-    }
-    
-    private func generateSimulatedOutput(for command: String) -> String {
-        // Generate realistic-looking output for common commands
-        let lowercased = command.lowercased()
-        
-        if lowercased == "ls" || lowercased == "ls -la" {
-            return """
-            total 48
-            drwxr-xr-x  6 user  staff   192 Mar  8 19:00 .
-            drwxr-xr-x  8 user  staff   256 Mar  8 18:30 ..
-            -rw-r--r--  1 user  staff  1024 Mar  8 19:00 README.md
-            drwxr-xr-x  3 user  staff    96 Mar  8 18:45 src
-            -rw-r--r--  1 user  staff   512 Mar  8 18:00 config.yml
-            
-            """
-        } else if lowercased == "pwd" {
-            return "/home/user\n"
-        } else if lowercased == "whoami" {
-            return "\(host?.wrappedUsername ?? "user")\n"
-        } else if lowercased == "date" {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "EEE MMM d HH:mm:ss z yyyy"
-            return "\(formatter.string(from: Date()))\n"
-        } else if lowercased.hasPrefix("echo ") {
-            let text = command.dropFirst(5)
-            return "\(text)\n"
-        } else if lowercased == "clear" {
-            DispatchQueue.main.async {
-                self.output = ""
-            }
-            return ""
-        } else if lowercased.hasPrefix("cd ") {
-            return ""
-        } else {
-            return "bash: \(command.split(separator: " ").first ?? ""): command not found\n"
-        }
-    }
 }
 
 // MARK: - Real SSH Implementation (NMSSH)

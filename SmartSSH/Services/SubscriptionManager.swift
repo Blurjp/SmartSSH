@@ -77,8 +77,11 @@ class SubscriptionManager: ObservableObject {
     @Published var isLoading: Bool = false
     
     private var updateTask: Task<Void, Error>?
+    private let isUITesting = ProcessInfo.processInfo.arguments.contains("--uitesting")
     
     init() {
+        guard !isUITesting else { return }
+
         // Listen for transaction updates
         updateTask = listenForTransactions()
         
@@ -156,6 +159,7 @@ class SubscriptionManager: ObservableObject {
     
     func updateCurrentSubscription() async {
         var highestTier: SubscriptionTier = .free
+        var resolvedSubscriptions: [Product] = []
         
         for await result in Transaction.currentEntitlements {
             do {
@@ -170,13 +174,14 @@ class SubscriptionManager: ObservableObject {
                         highestTier = .team
                     }
                     
-                    purchasedSubscriptions.append(subscription)
+                    resolvedSubscriptions.append(subscription)
                 }
             } catch {
                 print("Failed to verify transaction: \(error)")
             }
         }
         
+        purchasedSubscriptions = resolvedSubscriptions
         currentTier = highestTier
     }
     

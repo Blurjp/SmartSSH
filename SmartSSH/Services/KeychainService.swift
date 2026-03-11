@@ -18,75 +18,90 @@ class KeychainService {
     // MARK: - Save Password
     
     func savePassword(_ password: String, for hostId: UUID) throws {
-        let key = "password_\(hostId.uuidString)"
-        
-        // First, delete any existing password
-        try? deletePassword(for: hostId)
-        
-        let data = password.data(using: .utf8)!
-        
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        ]
-        
-        let status = SecItemAdd(query as CFDictionary, nil)
-        
-        guard status == errSecSuccess else {
-            throw KeychainError.unableToSave
-        }
+        try saveString(password, forAccount: "password_\(hostId.uuidString)")
     }
     
     // MARK: - Get Password
     
     func getPassword(for hostId: UUID) -> String? {
-        let key = "password_\(hostId.uuidString)"
-        
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let password = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        
-        return password
+        getString(forAccount: "password_\(hostId.uuidString)")
     }
     
     // MARK: - Delete Password
     
     func deletePassword(for hostId: UUID) throws {
-        let key = "password_\(hostId.uuidString)"
-        
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key
-        ]
-        
-        let status = SecItemDelete(query as CFDictionary)
-        
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw KeychainError.unableToDelete
-        }
+        try deleteValue(forAccount: "password_\(hostId.uuidString)")
     }
     
     // MARK: - Check if Password Exists
     
     func hasPassword(for hostId: UUID) -> Bool {
         return getPassword(for: hostId) != nil
+    }
+
+    // MARK: - Generic Storage
+
+    func saveString(_ value: String, forAccount account: String) throws {
+        guard let data = value.data(using: .utf8) else {
+            throw KeychainError.invalidData
+        }
+        try saveData(data, forAccount: account)
+    }
+
+    func getString(forAccount account: String) -> String? {
+        guard let data = getData(forAccount: account) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    func saveData(_ data: Data, forAccount account: String) throws {
+        try? deleteValue(forAccount: account)
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+
+        let status = SecItemAdd(query as CFDictionary, nil)
+
+        guard status == errSecSuccess else {
+            throw KeychainError.unableToSave
+        }
+    }
+
+    func getData(forAccount account: String) -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess, let data = result as? Data else {
+            return nil
+        }
+
+        return data
+    }
+
+    func deleteValue(forAccount account: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+
+        let status = SecItemDelete(query as CFDictionary)
+
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError.unableToDelete
+        }
     }
 }
 
@@ -96,6 +111,7 @@ enum KeychainError: Error, LocalizedError {
     case unableToSave
     case unableToDelete
     case notFound
+    case invalidData
     
     var errorDescription: String? {
         switch self {
@@ -105,6 +121,8 @@ enum KeychainError: Error, LocalizedError {
             return "Unable to delete password from Keychain"
         case .notFound:
             return "Password not found in Keychain"
+        case .invalidData:
+            return "Unable to encode data for Keychain storage"
         }
     }
 }

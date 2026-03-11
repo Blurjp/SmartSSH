@@ -7,8 +7,12 @@
 
 import SwiftUI
 
-struct Snippet: Identifiable, Codable {
-    let id = UUID()
+#if canImport(UIKit)
+import UIKit
+#endif
+
+struct Snippet: Identifiable, Codable, Equatable {
+    var id: UUID = UUID()
     var name: String
     var command: String
     var description: String
@@ -19,6 +23,8 @@ struct Snippet: Identifiable, Codable {
 }
 
 struct SnippetsView: View {
+    private let snippetsDefaultsKey = "saved_snippets"
+
     @State private var snippets: [Snippet] = []
     @State private var searchText = ""
     @State private var showingAddSnippet = false
@@ -37,54 +43,18 @@ struct SnippetsView: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(filteredSnippets) { snippet in
-                    SnippetRowView(snippet: snippet)
-                        .onTapGesture {
-                            copySnippet(snippet)
-                        }
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                deleteSnippet(snippet)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                        .swipeActions(edge: .leading) {
-                            Button {
-                                copySnippet(snippet)
-                            } label: {
-                                Label("Copy", systemImage: "doc.on.doc")
-                            }
-                            .tint(.blue)
-                        }
-                }
-            }
+            snippetsList
             .searchable(text: $searchText, prompt: "Search snippets...")
             .navigationTitle("Snippets")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button {
-                            showingAddSnippet = true
-                        } label: {
-                            Label("Add Snippet", systemImage: "plus")
-                        }
-                        
-                        Button {
-                            showingAISuggestion = true
-                        } label: {
-                            Label("AI Generate", systemImage: "sparkles")
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
+            .toolbar { snippetsToolbar }
             .sheet(isPresented: $showingAddSnippet) {
                 AddSnippetView { snippet in
                     snippets.append(snippet)
                 }
+            }
+            .onAppear(perform: loadSnippets)
+            .onChange(of: snippets) { _, newValue in
+                saveSnippets(newValue)
             }
             .overlay {
                 if snippets.isEmpty {
@@ -97,6 +67,34 @@ struct SnippetsView: View {
             }
         }
     }
+
+    private var snippetsList: some View {
+        List {
+            ForEach(filteredSnippets) { snippet in
+                snippetRow(snippet)
+            }
+        }
+    }
+
+    private var snippetsToolbar: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Button {
+                    showingAddSnippet = true
+                } label: {
+                    Label("Add Snippet", systemImage: "plus")
+                }
+
+                Button {
+                    showingAISuggestion = true
+                } label: {
+                    Label("AI Generate", systemImage: "sparkles")
+                }
+            } label: {
+                Image(systemName: "plus")
+            }
+        }
+    }
     
     private func copySnippet(_ snippet: Snippet) {
         UIPasteboard.general.string = snippet.command
@@ -104,6 +102,42 @@ struct SnippetsView: View {
     
     private func deleteSnippet(_ snippet: Snippet) {
         snippets.removeAll { $0.id == snippet.id }
+    }
+
+    private func loadSnippets() {
+        guard let data = UserDefaults.standard.data(forKey: snippetsDefaultsKey),
+              let savedSnippets = try? JSONDecoder().decode([Snippet].self, from: data) else {
+            return
+        }
+
+        snippets = savedSnippets
+    }
+
+    private func saveSnippets(_ snippets: [Snippet]) {
+        guard let data = try? JSONEncoder().encode(snippets) else { return }
+        UserDefaults.standard.set(data, forKey: snippetsDefaultsKey)
+    }
+
+    private func snippetRow(_ snippet: Snippet) -> some View {
+        SnippetRowView(snippet: snippet)
+            .onTapGesture {
+                copySnippet(snippet)
+            }
+            .swipeActions(edge: .trailing) {
+                Button(role: .destructive) {
+                    deleteSnippet(snippet)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+            .swipeActions(edge: .leading) {
+                Button {
+                    copySnippet(snippet)
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+                .tint(.blue)
+            }
     }
 }
 
