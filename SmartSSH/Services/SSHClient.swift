@@ -41,7 +41,7 @@ enum SSHConnectionState {
 
 // MARK: - SSH Client
 
-class SSHClient: ObservableObject {
+class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
     static let shared = SSHClient()
 
     // MARK: - Properties
@@ -54,6 +54,7 @@ class SSHClient: ObservableObject {
     private let sessionLock = NSLock()
     private var _session: NMSSHSession?
     private var _host: Host?
+    private var _hostVerificationFailureMessage: String?
 
     var host: Host? {
         sessionLock.withLock { _host }
@@ -88,7 +89,10 @@ class SSHClient: ObservableObject {
         }
 
         disconnect()
-        sessionLock.withLock { _host = host }
+        sessionLock.withLock {
+            _host = host
+            _hostVerificationFailureMessage = nil
+        }
 
         DispatchQueue.main.async {
             self.state = .connecting
@@ -109,9 +113,15 @@ class SSHClient: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async {
             let session = NMSSHSession(host: hostname, port: Int(host.port), andUsername: username)
             session.timeout = NSNumber(value: timeout)
+            session.delegate = self
+            if let sha1Hash = NMSSHSessionHash(rawValue: 1) {
+                session.fingerprintHash = sha1Hash
+            }
 
             guard session.connect(), session.isConnected else {
-                let message = session.lastError?.localizedDescription ?? "Unable to connect"
+                let message = self.sessionLock.withLock {
+                    self._hostVerificationFailureMessage
+                } ?? session.lastError?.localizedDescription ?? "Unable to connect"
                 DispatchQueue.main.async {
                     self.state = .error(message)
                     self.isConnected = false
@@ -181,6 +191,7 @@ class SSHClient: ObservableObject {
             let s = _session
             _session = nil
             _host = nil
+            _hostVerificationFailureMessage = nil
             return s
         }
         let hadSession = oldSession != nil || isConnected
@@ -246,5 +257,25 @@ class SSHClient: ObservableObject {
             self.output = ""
         }
     }
-    
+
+    func session(_ session: NMSSHSession, shouldConnectToHostWithFingerprint fingerprint: String) -> Bool {
+        let decision = SSHManager.shared.verifyHostFingerprint(
+            fingerprint,
+            hostname: session.host,
+            port: session.port.intValue
+        )
+
+        switch decision {
+        case .trustedKnownHost:
+            return true
+        case .trustedFirstUse:
+            appendOutput("Trusted new host fingerprint for \(session.host):\(session.port.intValue).\n")
+            return true
+        case .rejectedMismatch(let expected, let actual):
+            sessionLock.withLock {
+                _hostVerificationFailureMessage = "Host key verification failed for \(session.host):\(session.port.intValue). Expected \(expected), received \(actual)."
+            }
+            return false
+        }
+    }
 }

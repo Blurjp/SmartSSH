@@ -76,6 +76,7 @@ class SSHManager: ObservableObject {
     static let shared = SSHManager()
 
     private let savedKeysDefaultsKey = "saved_ssh_keys"
+    private let knownHostsDefaultsKey = "known_ssh_hosts"
     
     @Published var activeSessions: [UUID: SSHSession] = [:]
     @Published var connectionStatus: [UUID: String] = [:]
@@ -313,18 +314,75 @@ class SSHManager: ObservableObject {
     func privateKey(named name: String) -> String? {
         KeychainService.shared.getString(forAccount: privateKeyAccount(for: name))
     }
+
+    func clearKnownHosts() {
+        UserDefaults.standard.removeObject(forKey: knownHostsDefaultsKey)
+    }
+
+    func verifyHostFingerprint(_ fingerprint: String, hostname: String, port: Int) -> HostTrustDecision {
+        let endpoint = knownHostEndpoint(hostname: hostname, port: port)
+        var knownHosts = loadKnownHosts()
+
+        if let existing = knownHosts[endpoint] {
+            if existing.fingerprint == fingerprint {
+                return .trustedKnownHost
+            }
+
+            return .rejectedMismatch(expected: existing.fingerprint, actual: fingerprint)
+        }
+
+        knownHosts[endpoint] = KnownHostRecord(
+            hostname: hostname,
+            port: port,
+            fingerprint: fingerprint,
+            firstSeenAt: Date()
+        )
+        persistKnownHosts(knownHosts)
+        return .trustedFirstUse
+    }
     
 }
 
 private extension SSHManager {
+    struct KnownHostRecord: Codable {
+        let hostname: String
+        let port: Int
+        let fingerprint: String
+        let firstSeenAt: Date
+    }
+
     func privateKeyAccount(for name: String) -> String {
         "ssh_private_key_\(name)"
+    }
+
+    func knownHostEndpoint(hostname: String, port: Int) -> String {
+        "\(hostname.lowercased()):\(port)"
     }
 
     func persistSavedKeys(_ keys: [SavedSSHKey]) {
         guard let data = try? JSONEncoder().encode(keys) else { return }
         UserDefaults.standard.set(data, forKey: savedKeysDefaultsKey)
     }
+
+    func loadKnownHosts() -> [String: KnownHostRecord] {
+        guard let data = UserDefaults.standard.data(forKey: knownHostsDefaultsKey),
+              let knownHosts = try? JSONDecoder().decode([String: KnownHostRecord].self, from: data) else {
+            return [:]
+        }
+
+        return knownHosts
+    }
+
+    func persistKnownHosts(_ knownHosts: [String: KnownHostRecord]) {
+        guard let data = try? JSONEncoder().encode(knownHosts) else { return }
+        UserDefaults.standard.set(data, forKey: knownHostsDefaultsKey)
+    }
+}
+
+enum HostTrustDecision {
+    case trustedFirstUse
+    case trustedKnownHost
+    case rejectedMismatch(expected: String, actual: String)
 }
 
 private func sshString(_ data: Data) -> Data {

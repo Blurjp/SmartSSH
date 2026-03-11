@@ -95,6 +95,65 @@ extension Host {
         useKeyAuth: Bool = false
     ) -> Host {
         let host = Host(context: context)
+        configure(
+            host,
+            name: name,
+            hostname: hostname,
+            port: port,
+            username: username,
+            password: password,
+            keyFingerprint: keyFingerprint,
+            group: group,
+            tags: tags,
+            useKeyAuth: useKeyAuth
+        )
+        return host
+    }
+
+    static func createTransient(
+        using context: NSManagedObjectContext,
+        name: String,
+        hostname: String,
+        port: Int16 = 22,
+        username: String,
+        password: String? = nil,
+        keyFingerprint: String? = nil,
+        group: String? = nil,
+        tags: [String]? = nil,
+        useKeyAuth: Bool = false
+    ) -> Host? {
+        guard let entity = NSEntityDescription.entity(forEntityName: "Host", in: context) else {
+            return nil
+        }
+
+        let host = Host(entity: entity, insertInto: nil)
+        configure(
+            host,
+            name: name,
+            hostname: hostname,
+            port: port,
+            username: username,
+            password: password,
+            keyFingerprint: keyFingerprint,
+            group: group,
+            tags: tags,
+            useKeyAuth: useKeyAuth
+        )
+        return host
+    }
+
+    private static func configure(
+        _ host: Host,
+        name: String,
+        hostname: String,
+        port: Int16,
+        username: String,
+        password: String?,
+        keyFingerprint: String?,
+        group: String?,
+        tags: [String]?,
+        useKeyAuth: Bool
+    ) {
         host.id = UUID()
         host.name = name
         host.hostname = hostname
@@ -110,13 +169,12 @@ extension Host {
         host.status = "disconnected"
         host.color = "blue"
         host.snippets = []
-        
-        // Save password to Keychain (secure storage)
-        if let password = password, !password.isEmpty {
-            try? KeychainService.shared.savePassword(password, for: host.id!)
+
+        if let password = password,
+           !password.isEmpty,
+           let hostID = host.id {
+            try? KeychainService.shared.savePassword(password, for: hostID)
         }
-        
-        return host
     }
     
     // Delete password from Keychain when host is deleted

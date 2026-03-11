@@ -289,6 +289,8 @@ struct SettingsView: View {
             SSHManager.shared.deleteKey(named: key.name)
         }
 
+        SSHManager.shared.clearKnownHosts()
+
         UserDefaults.standard.removeObject(forKey: "saved_snippets")
     }
 

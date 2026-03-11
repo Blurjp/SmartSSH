@@ -237,18 +237,23 @@ struct AddHostView: View {
     
     private func testConnection() {
         isTesting = true
-        
-        // Create temporary host for testing
-        let tempHost = Host.create(
-            in: viewContext,
+
+        guard let tempHost = Host.createTransient(
+            using: viewContext,
             name: name,
             hostname: hostname,
             port: Int16(port) ?? 22,
             username: username,
             password: useKeyAuth ? nil : password,
-            keyFingerprint: useKeyAuth ? selectedKey : nil
-        )
-        
+            keyFingerprint: useKeyAuth ? selectedKey : nil,
+            useKeyAuth: useKeyAuth
+        ) else {
+            isTesting = false
+            errorMessage = "Unable to prepare a temporary host for connection testing."
+            showingError = true
+            return
+        }
+
         SSHClient.shared.connect(to: tempHost) { result in
             isTesting = false
             
@@ -257,13 +262,11 @@ struct AddHostView: View {
                 showingSuccess = true
                 SSHClient.shared.disconnect()
                 tempHost.deletePassword()
-                viewContext.delete(tempHost)
-                 
+                  
             case .failure(let error):
                 errorMessage = error.localizedDescription
                 showingError = true
                 tempHost.deletePassword()
-                viewContext.delete(tempHost)
             }
         }
     }
