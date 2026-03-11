@@ -32,7 +32,7 @@ enum SSHError: Error {
 }
 
 struct SavedSSHKey: Identifiable, Codable, Equatable {
-    let id: String
+    let id: UUID
     let name: String
     let type: String
     let fingerprint: String
@@ -40,12 +40,26 @@ struct SavedSSHKey: Identifiable, Codable, Equatable {
     let createdAt: Date
 
     init(name: String, type: String, fingerprint: String, publicKey: String, createdAt: Date) {
-        self.id = name
+        self.id = UUID()
         self.name = name
         self.type = type
         self.fingerprint = fingerprint
         self.publicKey = publicKey
         self.createdAt = createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let decodedID = try? container.decode(UUID.self, forKey: .id) {
+            id = decodedID
+        } else {
+            id = UUID()
+        }
+        name = try container.decode(String.self, forKey: .name)
+        type = try container.decode(String.self, forKey: .type)
+        fingerprint = try container.decode(String.self, forKey: .fingerprint)
+        publicKey = try container.decode(String.self, forKey: .publicKey)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
 }
 

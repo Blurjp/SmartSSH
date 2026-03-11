@@ -9,8 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selectedTab = 0
-    @State private var showingSettings = false
-    @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @ObservedObject private var subscriptionManager = SubscriptionManager.shared
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -36,6 +35,7 @@ struct ContentView: View {
                 .tabItem {
                     Label("Files", systemImage: "folder")
                 }
+                .tag(2)
             
             KeysView()
                 .tabItem {
@@ -53,6 +53,7 @@ struct ContentView: View {
                 .tabItem {
                     Label("Snippets", systemImage: "text.badge.plus")
                 }
+                .tag(4)
             
             SettingsView()
                 .tabItem {
@@ -61,6 +62,10 @@ struct ContentView: View {
                 .tag(5)
         }
         .tint(.blue)
+        .onReceive(NotificationCenter.default.publisher(for: .smartSSHSelectTab)) { notification in
+            guard let tab = notification.object as? Int else { return }
+            selectedTab = tab
+        }
     }
 
     @ViewBuilder
@@ -72,12 +77,15 @@ struct ContentView: View {
         tag: Int
     ) -> some View {
         if subscriptionManager.hasAccess(to: requiredFeature) {
-            content.tag(tag)
+            content
         } else {
             LockedFeatureView(title: title, systemImage: systemImage)
-                .tag(tag)
         }
     }
+}
+
+extension Notification.Name {
+    static let smartSSHSelectTab = Notification.Name("smartSSHSelectTab")
 }
 
 private struct LockedFeatureView: View {

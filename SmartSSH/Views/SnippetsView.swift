@@ -87,6 +87,9 @@ struct SnippetsView: View {
     
     private func copySnippet(_ snippet: Snippet) {
         UIPasteboard.general.string = snippet.command
+        guard let index = snippets.firstIndex(where: { $0.id == snippet.id }) else { return }
+        snippets[index].useCount += 1
+        snippets[index].lastUsedAt = Date()
     }
     
     private func deleteSnippet(_ snippet: Snippet) {

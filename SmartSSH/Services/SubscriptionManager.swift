@@ -166,9 +166,10 @@ class SubscriptionManager: ObservableObject {
                 
                 if let subscription = products.first(where: { $0.id == transaction.productID }) {
                     // Determine tier
-                    if transaction.productID == SubscriptionTier.pro.rawValue ||
-                       transaction.productID == SubscriptionTier.proYearly.rawValue {
+                    if transaction.productID == SubscriptionTier.pro.rawValue {
                         highestTier = .pro
+                    } else if transaction.productID == SubscriptionTier.proYearly.rawValue {
+                        highestTier = .proYearly
                     } else if transaction.productID == SubscriptionTier.team.rawValue {
                         highestTier = .team
                     }
@@ -187,7 +188,7 @@ class SubscriptionManager: ObservableObject {
     // MARK: - Listen for Transactions
     
     private func listenForTransactions() -> Task<Void, Error> {
-        return Task.detached {
+        return Task {
             for await result in Transaction.updates {
                 do {
                     let transaction = try self.checkVerified(result)

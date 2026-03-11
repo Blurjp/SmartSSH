@@ -15,7 +15,7 @@ struct SettingsView: View {
     @AppStorage("keepAliveInterval") private var keepAliveInterval = 30
     @AppStorage("connectionTimeout") private var connectionTimeout = 30
     @AppStorage("hapticFeedback") private var hapticFeedback = true
-    @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @ObservedObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showingSubscription = false
     @State private var settingsMessage = ""
     @State private var showingSettingsMessage = false
@@ -23,7 +23,7 @@ struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 // Subscription Section
                 subscriptionSection
@@ -341,6 +341,12 @@ struct FeatureRow: View {
 // MARK: - About View
 
 struct AboutView: View {
+    private var versionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        return "Version \(version) (Build \(build))"
+    }
+
     var body: some View {
         List {
             Section {
@@ -367,7 +373,7 @@ struct AboutView: View {
                         .font(.title)
                         .fontWeight(.bold)
                     
-                    Text("Version 1.0.0 (Build 1)")
+                    Text(versionText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -13,7 +13,7 @@ import UIKit
 #endif
 
 struct SFTPView: View {
-    @StateObject private var sftpClient = SFTPClient.shared
+    @ObservedObject private var sftpClient = SFTPClient.shared
     @State private var selectedFile: SFTPFile?
     @State private var showingFileActions = false
     @State private var showingCreateDirectory = false
@@ -80,8 +80,19 @@ struct SFTPView: View {
             .sheet(isPresented: $showingCreateDirectory) {
                 createDirectorySheet
             }
+            .onChange(of: showingCreateDirectory) { _, isPresented in
+                if !isPresented {
+                    newDirectoryName = ""
+                }
+            }
             .sheet(isPresented: $showingRenameSheet) {
                 renameFileSheet
+            }
+            .onChange(of: showingRenameSheet) { _, isPresented in
+                if !isPresented {
+                    renamedFileName = ""
+                    selectedFile = nil
+                }
             }
             .confirmationDialog("File Actions", isPresented: $showingFileActions, presenting: selectedFile) { file in
                 fileActionsSheet(file: file)
@@ -111,15 +122,15 @@ struct SFTPView: View {
     private var pathBreadcrumb: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
-                ForEach(pathComponents, id: \.self) { component in
+                ForEach(pathComponents) { component in
                     Button {
-                        navigateToPathComponent(component)
+                        sftpClient.navigateTo(component.path)
                     } label: {
                         HStack(spacing: 4) {
-                            if component == "/" {
+                            if component.name == "/" {
                                 Image(systemName: "house.fill")
                             } else {
-                                Text(component)
+                                Text(component.name)
                             }
                         }
                         .font(.caption)
@@ -129,7 +140,7 @@ struct SFTPView: View {
                         .cornerRadius(4)
                     }
                     
-                    if component != pathComponents.last {
+                    if component.id != pathComponents.last?.id {
                         Image(systemName: "chevron.right")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -142,9 +153,16 @@ struct SFTPView: View {
         .background(Color(.systemGray6))
     }
     
-    private var pathComponents: [String] {
-        var components = sftpClient.currentPath.split(separator: "/").map(String.init)
-        components.insert("/", at: 0)
+    private var pathComponents: [BreadcrumbComponent] {
+        let names = sftpClient.currentPath.split(separator: "/").map(String.init)
+        var currentPath = "/"
+        var components = [BreadcrumbComponent(name: "/", path: "/")]
+
+        for name in names {
+            currentPath = (currentPath as NSString).appendingPathComponent(name)
+            components.append(BreadcrumbComponent(name: name, path: currentPath))
+        }
+
         return components
     }
     
@@ -364,26 +382,6 @@ struct SFTPView: View {
         }
     }
     
-    private func navigateToPathComponent(_ component: String) {
-        if component == "/" {
-            sftpClient.navigateTo("/")
-            return
-        }
-        
-        var path = ""
-        for comp in pathComponents {
-            if comp == "/" {
-                path = "/"
-            } else {
-                path = (path as NSString).appendingPathComponent(comp)
-            }
-            if comp == component {
-                break
-            }
-        }
-        sftpClient.navigateTo(path)
-    }
-    
     private func refreshList() {
         guard sshConnected else { return }
         sftpClient.listDirectory(sftpClient.currentPath) { _ in }
@@ -452,14 +450,28 @@ struct SFTPView: View {
         switch result {
         case .success(let url):
             let accessGranted = url.startAccessingSecurityScopedResource()
-            defer {
+            let remotePath = (sftpClient.currentPath as NSString).appendingPathComponent(url.lastPathComponent)
+            let localUploadURL = uploadStagingURL(for: url)
+
+            do {
+                if FileManager.default.fileExists(atPath: localUploadURL.path) {
+                    try FileManager.default.removeItem(at: localUploadURL)
+                }
+                try FileManager.default.copyItem(at: url, to: localUploadURL)
+            } catch {
                 if accessGranted {
                     url.stopAccessingSecurityScopedResource()
                 }
+                showAlert(error.localizedDescription)
+                return
             }
 
-            let remotePath = (sftpClient.currentPath as NSString).appendingPathComponent(url.lastPathComponent)
-            sftpClient.uploadFile(url.path, to: remotePath) { uploadResult in
+            if accessGranted {
+                url.stopAccessingSecurityScopedResource()
+            }
+
+            sftpClient.uploadFile(localUploadURL.path, to: remotePath) { uploadResult in
+                try? FileManager.default.removeItem(at: localUploadURL)
                 switch uploadResult {
                 case .success:
                     refreshList()
@@ -477,6 +489,19 @@ struct SFTPView: View {
         alertMessage = message
         showingAlert = true
     }
+
+    private func uploadStagingURL(for url: URL) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(url.pathExtension)
+    }
+}
+
+private struct BreadcrumbComponent: Identifiable, Hashable {
+    let name: String
+    let path: String
+
+    var id: String { path }
 }
 
 // MARK: - File Row View

@@ -12,11 +12,11 @@ import UIKit
 #endif
 
 struct TerminalView: View {
-    @StateObject private var sshClient = SSHClient.shared
+    @ObservedObject private var sshClient = SSHClient.shared
     @State private var commandInput = ""
     @State private var commandHistory: [String] = []
     @State private var historyIndex = -1
-    @State private var fontSize: CGFloat = 14
+    @AppStorage("terminalFontSize") private var fontSize = 14.0
     @FocusState private var isInputFocused: Bool
     
     var body: some View {
@@ -134,8 +134,9 @@ struct TerminalView: View {
                 } label: {
                     Text("  \(cmd)")
                         .font(.system(size: fontSize, design: .monospaced))
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(sshClient.isConnected ? .cyan : .gray)
                 }
+                .disabled(!sshClient.isConnected)
             }
         }
     }
@@ -236,7 +237,7 @@ struct TerminalView: View {
             Text("Connect to a host from the Hosts tab to start a terminal session.")
         } actions: {
             Button("Go to Hosts") {
-                // Navigate to hosts tab
+                NotificationCenter.default.post(name: .smartSSHSelectTab, object: 0)
             }
             .buttonStyle(.borderedProminent)
         }

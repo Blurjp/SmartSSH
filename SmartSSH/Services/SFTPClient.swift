@@ -85,13 +85,13 @@ class SFTPClient: ObservableObject {
     @Published var pathHistory: [String] = ["/"]
     @Published var historyIndex: Int = 0
     
-    private var session: Any? // NMSSHSession in production
-    
     // MARK: - Directory Operations
     
     func listDirectory(_ path: String, completion: @escaping (Result<[SFTPFile], SFTPError>) -> Void) {
-        isLoading = true
-        currentPath = path
+        DispatchQueue.main.async {
+            self.isLoading = true
+            self.currentPath = path
+        }
 
         DispatchQueue.global(qos: .userInitiated).async {
             guard let sftp = self.connectedSFTP() else {
@@ -132,7 +132,7 @@ class SFTPClient: ObservableObject {
     }
     
     func navigateUp() {
-        let parentPath = (currentPath as NSString).deletingLastPathComponent
+        let parentPath = normalizedParentPath(for: currentPath)
         if !parentPath.isEmpty {
             addToHistory(parentPath)
             listDirectory(parentPath) { _ in }
@@ -161,6 +161,13 @@ class SFTPClient: ObservableObject {
     }
     
     private func addToHistory(_ path: String) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async {
+                self.addToHistory(path)
+            }
+            return
+        }
+
         // Remove forward history when navigating to new path
         if historyIndex < pathHistory.count - 1 {
             pathHistory = Array(pathHistory.prefix(historyIndex + 1))
@@ -295,6 +302,11 @@ class SFTPClient: ObservableObject {
         let sftp = session.sftp
         if sftp.isConnected { return sftp }
         return sftp.connect() ? sftp : nil
+    }
+
+    private func normalizedParentPath(for path: String) -> String {
+        let parentPath = (path as NSString).deletingLastPathComponent
+        return parentPath.isEmpty ? "/" : parentPath
     }
 
     private func makeFile(from remoteFile: NMSFTPFile, parentPath: String) -> SFTPFile {

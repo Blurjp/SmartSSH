@@ -44,21 +44,28 @@ enum SSHConnectionState {
 class SSHClient: ObservableObject {
     static let shared = SSHClient()
 
-    private let unavailableMessage = "Real SSH transport is not configured in this build. Add a production SSH backend before release."
-    
     // MARK: - Properties
     
     @Published var state: SSHConnectionState = .disconnected
     @Published var output: String = ""
     @Published var isConnected: Bool = false
     
-    private var session: NMSSHSession?
-    var host: Host?
-    private var outputQueue = DispatchQueue(label: "com.smartssh.output")
+    /// Serializes all reads/writes of `_session` and `host`.
+    private let sessionLock = NSLock()
+    private var _session: NMSSHSession?
+    private var _host: Host?
 
+    var host: Host? {
+        sessionLock.withLock { _host }
+    }
+
+    /// Returns the active, authorized session if one exists.
+    /// Safe to call from any thread.
     var activeSession: NMSSHSession? {
-        guard let session, session.isConnected, session.isAuthorized else { return nil }
-        return session
+        sessionLock.withLock {
+            guard let s = _session, s.isConnected, s.isAuthorized else { return nil }
+            return s
+        }
     }
     
     // MARK: - Connection
@@ -80,8 +87,9 @@ class SSHClient: ObservableObject {
             privateKey = nil
         }
 
-        self.host = host
-        
+        disconnect()
+        sessionLock.withLock { _host = host }
+
         DispatchQueue.main.async {
             self.state = .connecting
             self.output = ""
@@ -96,7 +104,6 @@ class SSHClient: ObservableObject {
             return
         }
 
-        disconnect()
         appendOutput("Connecting to \(hostname)...\n")
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -158,8 +165,8 @@ class SSHClient: ObservableObject {
 
             session.channel.requestPty = true
 
+            self.sessionLock.withLock { self._session = session }
             DispatchQueue.main.async {
-                self.session = session
                 self.state = .connected
                 self.isConnected = true
                 self.appendOutput("Connected!\n\n")
@@ -169,13 +176,16 @@ class SSHClient: ObservableObject {
     }
     
     func disconnect() {
-        let hadSession = session != nil || isConnected
+        // Capture and clear under lock so no other thread can use the session after this point.
+        let oldSession: NMSSHSession? = sessionLock.withLock {
+            let s = _session
+            _session = nil
+            _host = nil
+            return s
+        }
+        let hadSession = oldSession != nil || isConnected
+        oldSession?.disconnect()
 
-        // Cleanup session
-        session?.disconnect()
-        session = nil
-        host = nil
-        
         DispatchQueue.main.async {
             self.state = .disconnected
             self.isConnected = false
@@ -203,7 +213,8 @@ class SSHClient: ObservableObject {
 
         appendOutput("$ \(command)\n")
 
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
             var error: NSError?
             let response = session.channel.execute(command, error: &error, timeout: 30)
 
