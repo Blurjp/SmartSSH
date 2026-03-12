@@ -17,9 +17,18 @@ struct SmartSSHApp: App {
 
     init() {
         let isUITesting = ProcessInfo.processInfo.arguments.contains("--uitesting")
-        let controller = isUITesting
-            ? DataController(inMemory: true, cloudSyncEnabled: false)
-            : DataController.shared
+        let controller: DataController
+
+        if isUITesting {
+            controller = DataController(inMemory: true, cloudSyncEnabled: false)
+        } else {
+            #if targetEnvironment(simulator)
+            controller = DataController(inMemory: false, cloudSyncEnabled: false)
+            #else
+            controller = DataController.shared
+            #endif
+        }
+
         _dataController = StateObject(wrappedValue: controller)
     }
     
