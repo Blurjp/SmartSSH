@@ -14,6 +14,8 @@ import UIKit
 struct KeysView: View {
     @State private var keys: [SavedSSHKey] = []
     @State private var showingGenerateKey = false
+    @State private var errorMessage = ""
+    @State private var showingError = false
     
     var body: some View {
         NavigationStack {
@@ -56,6 +58,11 @@ struct KeysView: View {
                     loadKeys()
                 }
             }
+            .alert("SSH Keys", isPresented: $showingError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
             .onAppear(perform: loadKeys)
             .overlay {
                 if keys.isEmpty {
@@ -70,8 +77,13 @@ struct KeysView: View {
     }
     
     private func deleteKey(_ key: SavedSSHKey) {
-        SSHManager.shared.deleteKey(named: key.name)
-        loadKeys()
+        do {
+            try SSHManager.shared.deleteKey(named: key.name)
+            loadKeys()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
     
     private func copyPublicKey(_ key: SavedSSHKey) {
@@ -184,7 +196,7 @@ struct GenerateKeyView: View {
                 comment: keyComment.isEmpty ? nil : keyComment
             )
         
-            SSHManager.shared.saveKey(
+            try SSHManager.shared.saveKey(
                 name: keyName,
                 privateKey: result.privateKey,
                 publicKey: result.publicKey,

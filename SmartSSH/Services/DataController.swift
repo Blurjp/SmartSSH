@@ -12,6 +12,7 @@ class DataController: ObservableObject {
     static let shared = DataController()
     
     let container: NSPersistentCloudKitContainer
+    @Published var persistentStoreErrorMessage: String?
     
     init(inMemory: Bool = false, cloudSyncEnabled: Bool = true) {
         container = NSPersistentCloudKitContainer(name: "SmartSSH")
@@ -30,7 +31,9 @@ class DataController: ObservableObject {
         
         container.loadPersistentStores { description, error in
             if let error = error {
-                print("Core Data error: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.persistentStoreErrorMessage = error.localizedDescription
+                }
             }
         }
         

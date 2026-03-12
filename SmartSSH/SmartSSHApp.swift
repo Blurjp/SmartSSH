@@ -28,6 +28,8 @@ struct SmartSSHApp: App {
             Group {
                 if isUITesting {
                     UITestContentView()
+                } else if let persistentStoreErrorMessage = dataController.persistentStoreErrorMessage {
+                    PersistentStoreFailureView(message: persistentStoreErrorMessage)
                 } else {
                     ContentView()
                 }
@@ -35,6 +37,21 @@ struct SmartSSHApp: App {
                 .environment(\.managedObjectContext, dataController.container.viewContext)
                 .environmentObject(dataController)
                 .tint(.blue)
+        }
+    }
+}
+
+private struct PersistentStoreFailureView: View {
+    let message: String
+
+    var body: some View {
+        NavigationStack {
+            ContentUnavailableView {
+                Label("Storage Unavailable", systemImage: "externaldrive.badge.exclamationmark")
+            } description: {
+                Text("SmartSSH could not open its local data store. Check device storage and iCloud availability, then relaunch the app.\n\n\(message)")
+            }
+            .navigationTitle("Startup Error")
         }
     }
 }

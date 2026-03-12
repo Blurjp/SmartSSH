@@ -193,8 +193,9 @@ struct SettingsView: View {
         do {
             let payload = try makeExportPayload()
             let data = try JSONEncoder().encode(payload)
-            try data.write(to: exportURL(), options: .atomic)
-            settingsMessage = "Exported hosts and snippets to \(exportURL().lastPathComponent). SSH private keys stay in the Keychain and are not exported."
+            let destination = exportURL()
+            try data.write(to: destination, options: [.atomic, .completeFileProtection])
+            settingsMessage = "Exported hosts and snippets to \(destination.lastPathComponent) in the Files app. SSH private keys stay in the Keychain and are not exported."
         } catch {
             settingsMessage = "Export failed: \(error.localizedDescription)"
         }
@@ -204,12 +205,13 @@ struct SettingsView: View {
     
     private func importData() {
         do {
-            let data = try Data(contentsOf: exportURL())
+            let source = exportURL()
+            let data = try Data(contentsOf: source)
             let payload = try JSONDecoder().decode(SettingsExportPayload.self, from: data)
             try restore(from: payload)
-            settingsMessage = "Imported app data from \(exportURL().lastPathComponent)."
+            settingsMessage = "Imported app data from \(source.lastPathComponent)."
         } catch {
-            settingsMessage = "Import failed: \(error.localizedDescription)"
+            settingsMessage = importFailureMessage(for: error)
         }
 
         showingSettingsMessage = true
@@ -229,6 +231,15 @@ struct SettingsView: View {
     private func exportURL() -> URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("smartssh-export.json")
+    }
+
+    private func importFailureMessage(for error: Error) -> String {
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain, nsError.code == NSFileReadNoSuchFileError {
+            return "Import failed: `smartssh-export.json` was not found in the app's Files folder. Export data first or copy the file onto this device before importing."
+        }
+
+        return "Import failed: \(error.localizedDescription)"
     }
 
     private func makeExportPayload() throws -> SettingsExportPayload {
@@ -286,7 +297,7 @@ struct SettingsView: View {
         try viewContext.save()
 
         for key in SSHManager.shared.loadSavedKeys() {
-            SSHManager.shared.deleteKey(named: key.name)
+            try SSHManager.shared.deleteKey(named: key.name)
         }
 
         SSHManager.shared.clearKnownHosts()

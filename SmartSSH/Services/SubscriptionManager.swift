@@ -74,6 +74,7 @@ class SubscriptionManager: ObservableObject {
     @Published var purchasedSubscriptions: [Product] = []
     @Published var currentTier: SubscriptionTier = .free
     @Published var isLoading: Bool = false
+    @Published var restoreMessage: String?
     
     private var updateTask: Task<Void, Error>?
     private let isUITesting = ProcessInfo.processInfo.arguments.contains("--uitesting")
@@ -145,12 +146,16 @@ class SubscriptionManager: ObservableObject {
     
     // MARK: - Restore Purchases
     
-    func restorePurchases() async {
+    func restorePurchases() async throws {
         do {
             try await AppStore.sync()
             await updateCurrentSubscription()
+            restoreMessage = currentTier == .free
+                ? "No active subscriptions were found for this Apple Account."
+                : "Restored your \(currentTier.displayName) subscription."
         } catch {
-            print("Failed to restore purchases: \(error)")
+            restoreMessage = nil
+            throw error
         }
     }
     

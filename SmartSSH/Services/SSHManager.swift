@@ -276,10 +276,10 @@ class SSHManager: ObservableObject {
         return (formattedPrivateKey, publicKeyLine, fingerprint)
     }
     
-    func saveKey(name: String, privateKey: String, publicKey: String, fingerprint: String, type: String = "ed25519", passphrase: String? = nil) {
+    func saveKey(name: String, privateKey: String, publicKey: String, fingerprint: String, type: String = "ed25519", passphrase: String? = nil) throws {
         let createdAt = Date()
 
-        try? KeychainService.shared.saveString(privateKey, forAccount: privateKeyAccount(for: name))
+        try KeychainService.shared.saveString(privateKey, forAccount: privateKeyAccount(for: name))
 
         let metadata = SavedSSHKey(
             name: name,
@@ -304,11 +304,12 @@ class SSHManager: ObservableObject {
         return keys.sorted { $0.createdAt > $1.createdAt }
     }
 
-    func deleteKey(named name: String) {
+    func deleteKey(named name: String) throws {
+        try KeychainService.shared.deleteValue(forAccount: privateKeyAccount(for: name))
+
         var keys = loadSavedKeys()
         keys.removeAll { $0.name == name }
         persistSavedKeys(keys)
-        try? KeychainService.shared.deleteValue(forAccount: privateKeyAccount(for: name))
     }
 
     func privateKey(named name: String) -> String? {

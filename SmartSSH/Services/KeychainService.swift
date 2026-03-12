@@ -54,20 +54,36 @@ class KeychainService {
     }
 
     func saveData(_ data: Data, forAccount account: String) throws {
-        try? deleteValue(forAccount: account)
-
-        let query: [String: Any] = [
+        let baseQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
+            kSecAttrAccount as String: account
+        ]
+
+        let addQuery: [String: Any] = baseQuery.merging([
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]) { _, new in new }
+
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+
+        if addStatus == errSecSuccess {
+            return
+        }
+
+        guard addStatus == errSecDuplicateItem else {
+            throw KeychainError.unableToSave(status: addStatus)
+        }
+
+        let updateAttributes: [String: Any] = [
             kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
 
-        let status = SecItemAdd(query as CFDictionary, nil)
+        let updateStatus = SecItemUpdate(baseQuery as CFDictionary, updateAttributes as CFDictionary)
 
-        guard status == errSecSuccess else {
-            throw KeychainError.unableToSave
+        guard updateStatus == errSecSuccess else {
+            throw KeychainError.unableToSave(status: updateStatus)
         }
     }
 
@@ -100,7 +116,7 @@ class KeychainService {
         let status = SecItemDelete(query as CFDictionary)
 
         guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw KeychainError.unableToDelete
+            throw KeychainError.unableToDelete(status: status)
         }
     }
 }
@@ -108,17 +124,17 @@ class KeychainService {
 // MARK: - Keychain Errors
 
 enum KeychainError: Error, LocalizedError {
-    case unableToSave
-    case unableToDelete
+    case unableToSave(status: OSStatus)
+    case unableToDelete(status: OSStatus)
     case notFound
     case invalidData
     
     var errorDescription: String? {
         switch self {
-        case .unableToSave:
-            return "Unable to save password to Keychain"
-        case .unableToDelete:
-            return "Unable to delete password from Keychain"
+        case .unableToSave(let status):
+            return "Unable to save password to Keychain (\(status))"
+        case .unableToDelete(let status):
+            return "Unable to delete password from Keychain (\(status))"
         case .notFound:
             return "Password not found in Keychain"
         case .invalidData:

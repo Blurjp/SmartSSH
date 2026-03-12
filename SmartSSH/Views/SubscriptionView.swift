@@ -9,11 +9,12 @@ import SwiftUI
 import StoreKit
 
 struct SubscriptionView: View {
-    @StateObject private var subscriptionManager = SubscriptionManager.shared
+    @ObservedObject private var subscriptionManager = SubscriptionManager.shared
     @State private var selectedTier: SubscriptionTier = .pro
     @State private var isPurchasing: Bool = false
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
+    @State private var showingRestoreResult = false
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -47,6 +48,11 @@ struct SubscriptionView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(errorMessage)
+            }
+            .alert("Restore Purchases", isPresented: $showingRestoreResult) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(subscriptionManager.restoreMessage ?? "")
             }
         }
     }
@@ -162,7 +168,13 @@ struct SubscriptionView: View {
     private var restoreButton: some View {
         Button {
             Task {
-                await subscriptionManager.restorePurchases()
+                do {
+                    try await subscriptionManager.restorePurchases()
+                    showingRestoreResult = true
+                } catch {
+                    errorMessage = error.localizedDescription
+                    showError = true
+                }
             }
         } label: {
             Text("Restore Purchases")
