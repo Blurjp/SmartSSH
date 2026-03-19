@@ -1,22 +1,16 @@
 platform :ios, '17.0'
 use_frameworks!
 
-def shared_pods
+target 'SmartSSH' do
   pod 'NMSSH', '~> 2.3'
 end
 
-target 'SmartSSH' do
-  pod 'SwiftNIO', '~> 2.65'
-  pod 'SwiftNIOSSH', '~> 0.13.0'
-  pod 'NIOSSH', '~> 0.13.0'
-end
-
 target 'SmartSSHTests' do
-  shared_pods
+  inherit! :search_paths
 end
 
 target 'SmartSSHUITests' do
-  shared_pods
+  inherit! :search_paths
 end
 
 post_install do |installer|
@@ -31,6 +25,7 @@ post_install do |installer|
     target.user_project.native_targets.each do |native_target|
       native_target.build_configurations.each do |config|
         config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+        config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
       end
     end
     target.user_project.save
