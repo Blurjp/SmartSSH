@@ -144,6 +144,7 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
             if let sha1Hash = NMSSHSessionHash(rawValue: 1) {
                 session.fingerprintHash = sha1Hash
             }
+            session.applyBroadKEXPreferences()
 
             guard session.connect(), session.isConnected else {
                 print("[SSHClient] NMSSHSession.connect() failed")

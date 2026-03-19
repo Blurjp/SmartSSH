@@ -34,6 +34,7 @@
 		F01DF106172BFAA161183FAB /* SSHClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 617A837FE0FCF7161EDD79BA /* SSHClient.swift */; };
 		FCC824B7C354D564085F043A /* DataController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17160867D25F63BDD868E578 /* DataController.swift */; };
 		TEST00111111111111111111 /* SmartSSHTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEST22222222222222222222 /* SmartSSHTests.swift */; };
+		KEX11111111111111111111 /* NMSSHSession+KEX.m in Sources */ = {isa = PBXBuildFile; fileRef = KEX33333333333333333333 /* NMSSHSession+KEX.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -91,6 +92,9 @@
 		EE03D49CAE0F42A600354157 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F2BA0AE0890F6559685100C6 /* SFTPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTPClient.swift; sourceTree = "<group>"; };
 		TEST22222222222222222222 /* SmartSSHTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartSSHTests.swift; sourceTree = "<group>"; };
+		KEX22222222222222222222 /* NMSSHSession+KEX.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NMSSHSession+KEX.h"; sourceTree = "<group>"; };
+		KEX33333333333333333333 /* NMSSHSession+KEX.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NMSSHSession+KEX.m"; sourceTree = "<group>"; };
+		KEX44444444444444444444 /* SmartSSH-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SmartSSH-Bridging-Header.h"; sourceTree = "<group>"; };
 		TEST44444444444444444444 /* SmartSSH.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SmartSSH.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -194,6 +198,8 @@
 			children = (
 				5E2C92E319A3A18C0E6BFE11 /* AppColor.swift */,
 				6EC8D88FAA8117FDC65DD423 /* QuickActions.swift */,
+				KEX22222222222222222222 /* NMSSHSession+KEX.h */,
+				KEX33333333333333333333 /* NMSSHSession+KEX.m */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -237,6 +243,7 @@
 				BD628CF966BE60A9B6C3EE3C /* SmartSSH.entitlements */,
 				581E166A916CCDB6351564D8 /* SmartSSH.xcdatamodeld */,
 				A59D54CCC923C3743FC44314 /* SmartSSHApp.swift */,
+				KEX44444444444444444444 /* SmartSSH-Bridging-Header.h */,
 				998865F026A64E96A9FBE970 /* Models */,
 				3C03FBACB4ED64D251BC4E77 /* Services */,
 				7AC517161CFE4926688292DE /* Utils */,
@@ -474,6 +481,7 @@
 				DA691BCB2CCFCCA0E7997DC9 /* KeysView.swift in Sources */,
 				5E2C92E419A3A18C0E6BFE11 /* AppColor.swift in Sources */,
 				5338B4A58AB3619CAB421E6F /* QuickActions.swift in Sources */,
+				KEX11111111111111111111 /* NMSSHSession+KEX.m in Sources */,
 				BD7968D68D105BB1893EE091 /* SFTPClient.swift in Sources */,
 				5159CB75FB583358F1DE0476 /* SFTPView.swift in Sources */,
 				F01DF106172BFAA161183FAB /* SSHClient.swift in Sources */,
@@ -536,6 +544,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.smartssh.app;
 				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "SmartSSH/SmartSSH-Bridging-Header.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -656,6 +665,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.smartssh.app;
 				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "SmartSSH/SmartSSH-Bridging-Header.h";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
