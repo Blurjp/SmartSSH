@@ -46,8 +46,8 @@ struct AddHostView: View {
     }
     
     private var validPort: Int16? {
-        guard let portInt = Int16(port), portInt >= 1, portInt <= Int16(65535) else { return nil }
-        return portInt
+        guard let portInt = Int(port), portInt >= 1, portInt <= 65535 else { return nil }
+        return Int16(portInt)
     }
     
     var body: some View {
