@@ -85,7 +85,8 @@ class SSHManager: ObservableObject {
     private let sessionQueue = DispatchQueue(label: "com.sshterminal.ssh", qos: .userInitiated)
     
     private var connectionTimeout: TimeInterval {
-        TimeInterval(UserDefaults.standard.integer(forKey: "connectionTimeout"))
+        let saved = UserDefaults.standard.integer(forKey: "connectionTimeout")
+        return saved > 0 ? TimeInterval(saved) : 30.0
     }
     
     // MARK: - Connection
@@ -191,11 +192,10 @@ class SSHManager: ObservableObject {
         guard let session = activeSessions[sessionId] else { return }
         
         session.session.disconnect()
-        activeSessions.removeValue(forKey: sessionId)
-        connectionStatus.removeValue(forKey: sessionId)
         
-        // Update host status on main thread
         DispatchQueue.main.async {
+            self.activeSessions.removeValue(forKey: sessionId)
+            self.connectionStatus.removeValue(forKey: sessionId)
             session.host.status = "disconnected"
         }
     }

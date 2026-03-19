@@ -84,8 +84,8 @@ class SFTPClient: ObservableObject {
     @Published var currentPath: String = "/"
     @Published var files: [SFTPFile] = []
     @Published var isLoading: Bool = false
-    @Published private(set) var pathHistory: [String] = ["/"]
-    @Published private(set) var historyIndex: Int = 0
+    @Published var pathHistory: [String] = ["/"]
+    @Published var historyIndex: Int = 0
     
     // MARK: - Directory Operations
     
@@ -152,12 +152,14 @@ class SFTPClient: ObservableObject {
         let canGoBack = historyIndex > 0 && !pathHistory.isEmpty
         let targetIndex = canGoBack ? historyIndex - 1 : historyIndex
         let path = (canGoBack && targetIndex < pathHistory.count) ? pathHistory[targetIndex] : ""
-        if canGoBack {
-            historyIndex = targetIndex
-        }
         historyLock.unlock()
         
         if canGoBack && !path.isEmpty {
+            DispatchQueue.main.async {
+                self.historyLock.lock()
+                self.historyIndex = targetIndex
+                self.historyLock.unlock()
+            }
             listDirectory(path) { _ in }
         }
     }
@@ -167,12 +169,14 @@ class SFTPClient: ObservableObject {
         let canGoForward = historyIndex < pathHistory.count - 1 && !pathHistory.isEmpty
         let targetIndex = canGoForward ? historyIndex + 1 : historyIndex
         let path = (canGoForward && targetIndex < pathHistory.count) ? pathHistory[targetIndex] : ""
-        if canGoForward {
-            historyIndex = targetIndex
-        }
         historyLock.unlock()
         
         if canGoForward && !path.isEmpty {
+            DispatchQueue.main.async {
+                self.historyLock.lock()
+                self.historyIndex = targetIndex
+                self.historyLock.unlock()
+            }
             listDirectory(path) { _ in }
         }
     }
@@ -321,11 +325,20 @@ class SFTPClient: ObservableObject {
         }
     }
 
+    private var _sftp: NMSFTP?
+
     private func connectedSFTP() -> NMSFTP? {
+        if let sftp = _sftp, sftp.isConnected { return sftp }
         guard let session = SSHClient.shared.activeSession else { return nil }
-        let sftp = session.sftp
-        if sftp.isConnected { return sftp }
-        return sftp.connect() ? sftp : nil
+        let sftp = NMSFTP(session: session)
+        guard sftp.connect() else { return nil }
+        _sftp = sftp
+        return sftp
+    }
+
+    func disconnectSFTP() {
+        _sftp?.disconnect()
+        _sftp = nil
     }
 
     private func normalizedParentPath(for path: String) -> String {

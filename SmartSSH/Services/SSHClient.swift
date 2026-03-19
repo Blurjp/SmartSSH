@@ -13,7 +13,7 @@ import NMSSH
 
 // MARK: - SSH Connection States
 
-enum SSHConnectionState {
+enum SSHConnectionState: Equatable {
     case disconnected
     case connecting
     case connected
@@ -250,13 +250,8 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
         command: String,
         completion: @escaping (Result<String, SSHError>) -> Void
     ) {
-        guard isConnected else {
-            completion(.failure(.connectionFailed("Not connected")))
-            return
-        }
-
         guard let session = activeSession else {
-            completion(.failure(.connectionFailed("Session unavailable")))
+            completion(.failure(.connectionFailed("Not connected")))
             return
         }
 
@@ -376,8 +371,9 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
 
         connection.start(queue: queue)
 
+        let timedOut = semaphore.wait(timeout: .now() + timeout) == .timedOut
         resultLock.lock()
-        if semaphore.wait(timeout: .now() + timeout) == .timedOut && !finished {
+        if timedOut && !finished {
             finished = true
             result = "Timed out reaching \(hostname):\(port). \(localNetworkGuidance)"
         }

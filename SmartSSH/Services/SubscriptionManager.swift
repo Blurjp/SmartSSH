@@ -76,7 +76,7 @@ class SubscriptionManager: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var restoreMessage: String?
     
-    private var updateTask: Task<Void, Error>?
+    internal var updateTask: Task<Void, Error>?
     private let isUITesting = ProcessInfo.processInfo.arguments.contains("--uitesting")
     #if targetEnvironment(simulator)
     private let shouldSkipStoreKitSetup = true
