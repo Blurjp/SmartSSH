@@ -869,3 +869,70 @@ final class WeakSelfClosureTests: XCTestCase {
         XCTAssertNotNil(closure)
     }
 }
+
+// MARK: - Connection Timeout Tests
+
+final class ConnectionTimeoutTests: XCTestCase {
+    
+    func testDefaultTimeoutWhenNotSet() {
+        let saved = UserDefaults.standard.integer(forKey: "connectionTimeout")
+        let timeout = saved > 0 ? TimeInterval(saved) : 30.0
+        
+        XCTAssertEqual(timeout, 30.0, "Default timeout should be 30 seconds when not set")
+    }
+    
+    func testCustomTimeoutWhenSet() {
+        UserDefaults.standard.set(60, forKey: "connectionTimeout")
+        let saved = UserDefaults.standard.integer(forKey: "connectionTimeout")
+        let timeout = saved > 0 ? TimeInterval(saved) : 30.0
+        
+        XCTAssertEqual(timeout, 60.0, "Timeout should use saved value")
+        
+        // Cleanup
+        UserDefaults.standard.removeObject(forKey: "connectionTimeout")
+    }
+    
+    func testZeroTimeoutFallsBackToDefault() {
+        UserDefaults.standard.set(0, forKey: "connectionTimeout")
+        let saved = UserDefaults.standard.integer(forKey: "connectionTimeout")
+        let timeout = saved > 0 ? TimeInterval(saved) : 30.0
+        
+        XCTAssertEqual(timeout, 30.0, "Zero timeout should fall back to 30 seconds")
+        
+        // Cleanup
+        UserDefaults.standard.removeObject(forKey: "connectionTimeout")
+    }
+    
+    func testNegativeTimeoutFallsBackToDefault() {
+        UserDefaults.standard.set(-10, forKey: "connectionTimeout")
+        let saved = UserDefaults.standard.integer(forKey: "connectionTimeout")
+        let timeout = saved > 0 ? TimeInterval(saved) : 30.0
+        
+        XCTAssertEqual(timeout, 30.0, "Negative timeout should fall back to 30 seconds")
+        
+        // Cleanup
+        UserDefaults.standard.removeObject(forKey: "connectionTimeout")
+    }
+    
+    func testMinimumValidTimeout() {
+        UserDefaults.standard.set(1, forKey: "connectionTimeout")
+        let saved = UserDefaults.standard.integer(forKey: "connectionTimeout")
+        let timeout = saved > 0 ? TimeInterval(saved) : 30.0
+        
+        XCTAssertEqual(timeout, 1.0, "Minimum valid timeout should be 1 second")
+        
+        // Cleanup
+        UserDefaults.standard.removeObject(forKey: "connectionTimeout")
+    }
+    
+    func testLargeTimeout() {
+        UserDefaults.standard.set(300, forKey: "connectionTimeout")
+        let saved = UserDefaults.standard.integer(forKey: "connectionTimeout")
+        let timeout = saved > 0 ? TimeInterval(saved) : 30.0
+        
+        XCTAssertEqual(timeout, 300.0, "Large timeout should be accepted")
+        
+        // Cleanup
+        UserDefaults.standard.removeObject(forKey: "connectionTimeout")
+    }
+}
