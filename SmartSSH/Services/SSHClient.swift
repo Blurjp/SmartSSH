@@ -51,7 +51,8 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
     @Published var isConnected: Bool = false
     
     private var connectionTimeout: TimeInterval {
-        TimeInterval(UserDefaults.standard.integer(forKey: "connectionTimeout"))
+        let saved = UserDefaults.standard.integer(forKey: "connectionTimeout")
+        return saved > 0 ? TimeInterval(saved) : 30.0
     }
     
     /// Serializes all reads/writes of `_session` and `host`.
