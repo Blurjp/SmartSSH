@@ -24,6 +24,12 @@ struct HostsView: View {
     @State private var alertMessage = ""
     @State private var showingAlert = false
     
+    // Credential prompt state
+    @State private var pendingHost: Host?
+    @State private var showingCredentialPrompt = false
+    @State private var promptUsername = ""
+    @State private var promptPassword = ""
+    
     var filteredHosts: [Host] {
         if searchText.isEmpty {
             return Array(hosts)
@@ -84,6 +90,9 @@ struct HostsView: View {
             }
             .sheet(item: $selectedHost, onDismiss: loadHosts) { host in
                 AddHostView(hostToEdit: host)
+            }
+            .sheet(isPresented: $showingCredentialPrompt) {
+                credentialPromptSheet
             }
             .alert("Connection Status", isPresented: $showingConnectionAlert) {
                 Button("OK", role: .cancel) { }
@@ -207,6 +216,61 @@ struct HostsView: View {
         .accessibilityIdentifier("hosts.addButton")
     }
     
+    // MARK: - Credential Prompt Sheet
+
+    private var credentialPromptSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    if let host = pendingHost, host.wrappedUsername.isEmpty {
+                        HStack {
+                            Image(systemName: "person")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 24)
+                            TextField("Username", text: $promptUsername)
+                                .textContentType(.username)
+                                .autocapitalization(.none)
+                                .autocorrectionDisabled()
+                        }
+                    }
+                    HStack {
+                        Image(systemName: "lock")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24)
+                        SecureField("Password", text: $promptPassword)
+                            .textContentType(.password)
+                    }
+                } header: {
+                    if let host = pendingHost {
+                        Text("Enter credentials for \(host.wrappedName)")
+                    }
+                } footer: {
+                    Text("Credentials are stored securely in the Keychain. You can update them anytime by editing the host.")
+                        .font(.caption)
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Credentials Required")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showingCredentialPrompt = false
+                        pendingHost = nil
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Connect") {
+                        connectWithPromptedCredentials()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(promptPassword.isEmpty && (pendingHost?.wrappedUsername.isEmpty == true && promptUsername.isEmpty))
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
     // MARK: - Actions
 
     private func loadHosts() {
@@ -236,13 +300,49 @@ struct HostsView: View {
     }
     
     private func connect(to host: Host) {
-        let hostId = host.id
+        // If password auth and missing username or password, prompt first
+        if !host.useKeyAuth {
+            let missingUsername = host.wrappedUsername.isEmpty
+            let missingPassword = host.password == nil || host.password?.isEmpty == true
+            if missingUsername || missingPassword {
+                pendingHost = host
+                promptUsername = host.wrappedUsername
+                promptPassword = ""
+                showingCredentialPrompt = true
+                return
+            }
+        }
+        performConnect(to: host)
+    }
+
+    private func connectWithPromptedCredentials() {
+        guard let host = pendingHost else { return }
+        showingCredentialPrompt = false
+
+        // Save credentials to the host permanently
+        if !promptUsername.isEmpty {
+            host.username = promptUsername
+        }
+        if !promptPassword.isEmpty {
+            host.password = promptPassword
+        }
+        do {
+            try viewContext.save()
+        } catch {
+            print("[HostsView] Failed to save credentials: \(error)")
+        }
+
+        performConnect(to: host)
+        pendingHost = nil
+    }
+
+    private func performConnect(to host: Host) {
         let hostName = host.wrappedName
-        
+
         DispatchQueue.main.async {
             host.status = "connecting"
         }
-        
+
         SSHClient.shared.connect(to: host) { result in
             DispatchQueue.main.async {
                 switch result {
@@ -250,7 +350,6 @@ struct HostsView: View {
                     host.status = "connected"
                     self.connectionMessage = "Connected to \(hostName)"
                     self.showingConnectionAlert = true
-                    
                 case .failure(let error):
                     host.status = "error"
                     self.connectionMessage = "Connection failed: \(error.localizedDescription)"
