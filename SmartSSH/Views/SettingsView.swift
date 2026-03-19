@@ -177,11 +177,11 @@ struct SettingsView: View {
                 Label("About SmartSSH", systemImage: "info.circle")
             }
             
-            Link(destination: URL(string: "https://github.com/Blurjp/SmartSSH")!) {
+            Link(destination: URL(string: "https://github.com/Blurjp/SmartSSH") ?? URL(fileURLWithPath: "")) {
                 Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
             }
             
-            Link(destination: URL(string: "https://github.com/Blurjp/SmartSSH/issues")!) {
+            Link(destination: URL(string: "https://github.com/Blurjp/SmartSSH/issues") ?? URL(fileURLWithPath: "")) {
                 Label("Support", systemImage: "questionmark.circle")
             }
         }

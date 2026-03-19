@@ -69,9 +69,17 @@ extension Host {
         set {
             guard let hostId = id else { return }
             if let newPassword = newValue, !newPassword.isEmpty {
-                try? KeychainService.shared.savePassword(newPassword, for: hostId)
+                do {
+                    try KeychainService.shared.savePassword(newPassword, for: hostId)
+                } catch {
+                    print("Failed to save password for host \(wrappedName): \(error.localizedDescription)")
+                }
             } else {
-                try? KeychainService.shared.deletePassword(for: hostId)
+                do {
+                    try KeychainService.shared.deletePassword(for: hostId)
+                } catch {
+                    print("Failed to delete password for host \(wrappedName): \(error.localizedDescription)")
+                }
             }
         }
     }

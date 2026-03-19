@@ -236,20 +236,26 @@ struct HostsView: View {
     }
     
     private func connect(to host: Host) {
-        // Update host status
-        host.status = "connecting"
+        let hostId = host.id
+        let hostName = host.wrappedName
+        
+        DispatchQueue.main.async {
+            host.status = "connecting"
+        }
         
         SSHClient.shared.connect(to: host) { result in
-            switch result {
-            case .success:
-                host.status = "connected"
-                connectionMessage = "Connected to \(host.wrappedName)"
-                showingConnectionAlert = true
-                
-            case .failure(let error):
-                host.status = "error"
-                connectionMessage = "Connection failed: \(error.localizedDescription)"
-                showingConnectionAlert = true
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    host.status = "connected"
+                    self.connectionMessage = "Connected to \(hostName)"
+                    self.showingConnectionAlert = true
+                    
+                case .failure(let error):
+                    host.status = "error"
+                    self.connectionMessage = "Connection failed: \(error.localizedDescription)"
+                    self.showingConnectionAlert = true
+                }
             }
         }
     }

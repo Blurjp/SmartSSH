@@ -97,12 +97,19 @@ struct SnippetsView: View {
     }
 
     private func loadSnippets() {
-        guard let data = UserDefaults.standard.data(forKey: snippetsDefaultsKey),
-              let savedSnippets = try? JSONDecoder().decode([Snippet].self, from: data) else {
+        guard let data = UserDefaults.standard.data(forKey: snippetsDefaultsKey) else {
             return
         }
-
-        snippets = savedSnippets
+        
+        do {
+            let savedSnippets = try JSONDecoder().decode([Snippet].self, from: data)
+            snippets = savedSnippets
+        } catch {
+            print("Failed to load snippets: \(error.localizedDescription)")
+            print("Corrupted snippet data will be cleared. Original data size: \(data.count) bytes")
+            UserDefaults.standard.removeObject(forKey: snippetsDefaultsKey)
+            snippets = []
+        }
     }
 
     private func saveSnippets(_ snippets: [Snippet]) {

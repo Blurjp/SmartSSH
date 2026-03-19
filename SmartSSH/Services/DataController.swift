@@ -63,6 +63,12 @@ class DataController: ObservableObject {
             return (model, nil)
         }
 
+        #if DEBUG
         fatalError("SmartSSH could not load its Core Data model from the app bundle. Please reinstall the app.")
+        #else
+        let errorMessage = "SmartSSH could not load its data model. Please reinstall the app."
+        print("[DataController] CRITICAL: \(errorMessage)")
+        return (NSManagedObjectModel(), errorMessage)
+        #endif
     }
 }

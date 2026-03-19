@@ -455,7 +455,6 @@ struct SFTPView: View {
             let accessGranted = url.startAccessingSecurityScopedResource()
             let remotePath = (sftpClient.currentPath as NSString).appendingPathComponent(url.lastPathComponent)
             let localUploadURL = uploadStagingURL(for: url)
-            var cleanupScheduled = false
 
             defer {
                 if accessGranted {
@@ -468,7 +467,6 @@ struct SFTPView: View {
                     try FileManager.default.removeItem(at: localUploadURL)
                 }
                 try FileManager.default.copyItem(at: url, to: localUploadURL)
-                cleanupScheduled = true
             } catch {
                 showAlert(error.localizedDescription)
                 return
