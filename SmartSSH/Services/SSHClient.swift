@@ -170,9 +170,14 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
             let authorized: Bool
             if host.useKeyAuth {
                 print("[SSHClient] Attempting key authentication with key: \(keyName ?? "none")")
+                let allKeys = SSHManager.shared.loadSavedKeys()
+                print("[SSHClient] Available keys in metadata: \(allKeys.map { $0.name })")
+                print("[SSHClient] publicKey loaded: \(publicKey != nil), privateKey loaded: \(privateKey != nil)")
                 guard let publicKey, let privateKey else {
                     session.disconnect()
-                    let message = "Missing SSH key material for \(keyName ?? "selected key")"
+                    let missing = [publicKey == nil ? "public key" : nil, privateKey == nil ? "private key" : nil]
+                        .compactMap { $0 }.joined(separator: " and ")
+                    let message = "Missing \(missing) for '\(keyName ?? "selected key")'. The key may have been deleted from the Keychain. Please re-add it in the Keys tab."
                     print("[SSHClient] ERROR: \(message)")
                     DispatchQueue.main.async {
                         self.state = .error(message)
