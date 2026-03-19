@@ -21,6 +21,8 @@ struct HostsView: View {
     @State private var showingConnectionAlert = false
     @State private var connectionMessage = ""
     @State private var fetchErrorMessage: String?
+    @State private var alertMessage = ""
+    @State private var showingAlert = false
     
     var filteredHosts: [Host] {
         if searchText.isEmpty {
