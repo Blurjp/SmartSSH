@@ -333,10 +333,12 @@ final class TerminalHistoryTests: XCTestCase {
 
 final class PortValidationTests: XCTestCase {
     
+    private let maxPort: Int16 = 65535
+    
     func testValidPort() {
         let port = "22"
         let portInt = Int16(port)
-        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= 65535) ? portInt : nil
+        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= maxPort) ? portInt : nil
         
         XCTAssertNotNil(validPort)
         XCTAssertEqual(validPort, 22)
@@ -345,7 +347,7 @@ final class PortValidationTests: XCTestCase {
     func testPortMinimumBoundary() {
         let port = "1"
         let portInt = Int16(port)
-        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= 65535) ? portInt : nil
+        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= maxPort) ? portInt : nil
         
         XCTAssertNotNil(validPort)
         XCTAssertEqual(validPort, 1)
@@ -354,16 +356,16 @@ final class PortValidationTests: XCTestCase {
     func testPortMaximumBoundary() {
         let port = "65535"
         let portInt = Int16(port)
-        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= Int16(65535)) ? portInt : nil
+        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= maxPort) ? portInt : nil
         
         XCTAssertNotNil(validPort)
-        XCTAssertEqual(validPort, 65535)
+        XCTAssertEqual(validPort, maxPort)
     }
     
     func testPortOutOfRangeLow() {
         let port = "0"
         let portInt = Int16(port)
-        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= 65535) ? portInt : nil
+        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= maxPort) ? portInt : nil
         
         XCTAssertNil(validPort)
     }
@@ -371,7 +373,7 @@ final class PortValidationTests: XCTestCase {
     func testPortOutOfRangeHigh() {
         let port = "65536"
         let portInt = Int16(port)
-        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= 65535) ? portInt : nil
+        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= maxPort) ? portInt : nil
         
         XCTAssertNil(validPort)
     }
@@ -379,7 +381,7 @@ final class PortValidationTests: XCTestCase {
     func testPortInvalidString() {
         let port = "abc"
         let portInt = Int16(port)
-        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= 65535) ? portInt : nil
+        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= maxPort) ? portInt : nil
         
         XCTAssertNil(validPort)
     }
@@ -387,7 +389,7 @@ final class PortValidationTests: XCTestCase {
     func testPortEmptyString() {
         let port = ""
         let portInt = Int16(port)
-        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= 65535) ? portInt : nil
+        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= maxPort) ? portInt : nil
         
         XCTAssertNil(validPort)
     }
