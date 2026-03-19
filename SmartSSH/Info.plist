@@ -61,5 +61,10 @@
     <string>Allow SmartSSH to scan QR codes for quick host setup.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Allow SmartSSH to connect to SSH servers on your local network.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_ssh._tcp</string>
+        <string>_sftp-ssh._tcp</string>
+    </array>
 </dict>
 </plist>

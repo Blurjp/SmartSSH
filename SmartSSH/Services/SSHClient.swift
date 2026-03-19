@@ -356,10 +356,11 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
                 finished = true
                 result = self?.preflightMessage(for: error, hostname: hostname, port: port)
                 semaphore.signal()
-            case .waiting(let error):
-                finished = true
-                result = self?.preflightMessage(for: error, hostname: hostname, port: port)
-                semaphore.signal()
+            case .waiting:
+                // Do NOT treat .waiting as failure - this is normal for local network
+                // connections while iOS resolves local network permission.
+                // Let it keep waiting until timeout.
+                break
             case .cancelled:
                 finished = true
                 result = "Connection check was cancelled."
