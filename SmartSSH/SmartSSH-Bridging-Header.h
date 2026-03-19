@@ -3,5 +3,4 @@
 //  SmartSSH
 //
 
-#import <NMSSH/NMSSH.h>
-#import "NMSSHSession+KEX.h"
+#import <NMSSH_riden/NMSSH.h>

@@ -8,7 +8,7 @@
 import Foundation
 import Network
 import CryptoKit
-import NMSSH
+import NMSSH_riden
 import Security
 
 enum SSHError: Error {

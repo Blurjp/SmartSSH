@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import NMSSH
+import NMSSH_riden
 
 // MARK: - SFTP File Model
 

@@ -33,8 +33,8 @@
 		EDD0B37A49F9AD6606AD82F1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B9C6ADCE204DE387906D8A /* SettingsView.swift */; };
 		F01DF106172BFAA161183FAB /* SSHClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 617A837FE0FCF7161EDD79BA /* SSHClient.swift */; };
 		FCC824B7C354D564085F043A /* DataController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17160867D25F63BDD868E578 /* DataController.swift */; };
-		TEST00111111111111111111 /* SmartSSHTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEST22222222222222222222 /* SmartSSHTests.swift */; };
 		KEX11111111111111111111 /* NMSSHSession+KEX.m in Sources */ = {isa = PBXBuildFile; fileRef = KEX33333333333333333333 /* NMSSHSession+KEX.m */; };
+		TEST00111111111111111111 /* SmartSSHTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEST22222222222222222222 /* SmartSSHTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -91,10 +91,10 @@
 		E7C9F89C19C6BDA16CF085DE /* Pods_SmartSSHTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_SmartSSHTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE03D49CAE0F42A600354157 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F2BA0AE0890F6559685100C6 /* SFTPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTPClient.swift; sourceTree = "<group>"; };
-		TEST22222222222222222222 /* SmartSSHTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartSSHTests.swift; sourceTree = "<group>"; };
 		KEX22222222222222222222 /* NMSSHSession+KEX.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NMSSHSession+KEX.h"; sourceTree = "<group>"; };
 		KEX33333333333333333333 /* NMSSHSession+KEX.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NMSSHSession+KEX.m"; sourceTree = "<group>"; };
 		KEX44444444444444444444 /* SmartSSH-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SmartSSH-Bridging-Header.h"; sourceTree = "<group>"; };
+		TEST22222222222222222222 /* SmartSSHTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartSSHTests.swift; sourceTree = "<group>"; };
 		TEST44444444444444444444 /* SmartSSH.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SmartSSH.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 

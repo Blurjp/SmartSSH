@@ -2,7 +2,7 @@ platform :ios, '17.0'
 use_frameworks!
 
 target 'SmartSSH' do
-  pod 'NMSSH', '~> 2.3'
+  pod 'NMSSH-riden', '~> 2.7.2'
 end
 
 target 'SmartSSHTests' do
@@ -31,20 +31,23 @@ post_install do |installer|
     target.user_project.save
   end
 
-  # Patch NMSSH to advertise only the KEX algorithms compiled into libssh2 v1.8.
-  # Modern OpenSSH servers disable legacy DH algorithms by default; without this
-  # patch the SSH handshake fails with "Failure establishing SSH session".
-  nmssh_session = File.join(installer.sandbox.pod_dir('NMSSH'), 'NMSSH', 'NMSSHSession.m')
-  if File.exist?(nmssh_session)
+  # Patch NMSSHSession.m to set KEX algorithm preferences before handshake.
+  # Modern OpenSSH servers disable legacy DH algorithms; we must explicitly
+  # advertise what this libssh2 build supports.
+  ['NMSSH-riden', 'NMSSH'].each do |pod_name|
+    nmssh_session = File.join(installer.sandbox.pod_dir(pod_name), 'NMSSH', 'NMSSHSession.m')
+    next unless File.exist?(nmssh_session)
     content = File.read(nmssh_session)
     kex_patch = <<~'PATCH'
         libssh2_session_method_pref(self.session, LIBSSH2_METHOD_KEX,
+            "ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,"
             "diffie-hellman-group14-sha256,"
             "diffie-hellman-group14-sha1,"
             "diffie-hellman-group-exchange-sha256,"
             "diffie-hellman-group-exchange-sha1,"
             "diffie-hellman-group1-sha1");
         libssh2_session_method_pref(self.session, LIBSSH2_METHOD_HOSTKEY,
+            "ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,"
             "ssh-rsa,rsa-sha2-256,rsa-sha2-512,ssh-dss");
         libssh2_session_method_pref(self.session, LIBSSH2_METHOD_CRYPT_CS,
             "aes128-ctr,aes192-ctr,aes256-ctr,aes256-cbc,aes192-cbc,aes128-cbc,3des-cbc");
@@ -60,9 +63,10 @@ post_install do |installer|
     unless content.include?('LIBSSH2_METHOD_KEX')
       patched = content.sub(anchor, kex_patch + anchor)
       File.write(nmssh_session, patched)
-      puts "✅ Patched NMSSHSession.m with KEX algorithm preferences"
+      puts "✅ Patched #{pod_name}/NMSSHSession.m with KEX algorithm preferences"
     else
-      puts "ℹ️  NMSSHSession.m already patched"
+      puts "ℹ️  #{pod_name}/NMSSHSession.m already patched"
     end
+    break
   end
 end
