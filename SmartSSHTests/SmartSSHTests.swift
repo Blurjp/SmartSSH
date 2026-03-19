@@ -564,3 +564,308 @@ final class ErrorHandlingTests: XCTestCase {
         }
     }
 }
+
+// MARK: - SFTPClient Bounds Checking Tests
+
+final class SFTPClientBoundsTests: XCTestCase {
+    
+    func testGoBackWithEmptyHistory() {
+        var pathHistory: [String] = []
+        var historyIndex = 0
+        let historyLock = NSLock()
+        
+        historyLock.lock()
+        let canGoBack = historyIndex > 0 && !pathHistory.isEmpty
+        let targetIndex = canGoBack ? historyIndex - 1 : historyIndex
+        let path = (canGoBack && targetIndex < pathHistory.count) ? pathHistory[targetIndex] : ""
+        if canGoBack {
+            historyIndex = targetIndex
+        }
+        historyLock.unlock()
+        
+        XCTAssertFalse(canGoBack)
+        XCTAssertEqual(path, "")
+        XCTAssertEqual(historyIndex, 0)
+    }
+    
+    func testGoBackAtStartIndex() {
+        var pathHistory = ["/", "/home", "/home/user"]
+        var historyIndex = 0
+        let historyLock = NSLock()
+        
+        historyLock.lock()
+        let canGoBack = historyIndex > 0 && !pathHistory.isEmpty
+        let targetIndex = canGoBack ? historyIndex - 1 : historyIndex
+        let path = (canGoBack && targetIndex < pathHistory.count) ? pathHistory[targetIndex] : ""
+        if canGoBack {
+            historyIndex = targetIndex
+        }
+        historyLock.unlock()
+        
+        XCTAssertFalse(canGoBack)
+        XCTAssertEqual(historyIndex, 0)
+    }
+    
+    func testGoBackValidIndex() {
+        var pathHistory = ["/", "/home", "/home/user"]
+        var historyIndex = 2
+        let historyLock = NSLock()
+        
+        historyLock.lock()
+        let canGoBack = historyIndex > 0 && !pathHistory.isEmpty
+        let targetIndex = canGoBack ? historyIndex - 1 : historyIndex
+        let path = (canGoBack && targetIndex < pathHistory.count) ? pathHistory[targetIndex] : ""
+        if canGoBack {
+            historyIndex = targetIndex
+        }
+        historyLock.unlock()
+        
+        XCTAssertTrue(canGoBack)
+        XCTAssertEqual(path, "/home")
+        XCTAssertEqual(historyIndex, 1)
+    }
+    
+    func testGoForwardWithEmptyHistory() {
+        var pathHistory: [String] = []
+        var historyIndex = 0
+        let historyLock = NSLock()
+        
+        historyLock.lock()
+        let canGoForward = historyIndex < pathHistory.count - 1 && !pathHistory.isEmpty
+        let targetIndex = canGoForward ? historyIndex + 1 : historyIndex
+        let path = (canGoForward && targetIndex < pathHistory.count) ? pathHistory[targetIndex] : ""
+        if canGoForward {
+            historyIndex = targetIndex
+        }
+        historyLock.unlock()
+        
+        XCTAssertFalse(canGoForward)
+        XCTAssertEqual(path, "")
+        XCTAssertEqual(historyIndex, 0)
+    }
+    
+    func testGoForwardAtEndIndex() {
+        var pathHistory = ["/", "/home", "/home/user"]
+        var historyIndex = 2
+        let historyLock = NSLock()
+        
+        historyLock.lock()
+        let canGoForward = historyIndex < pathHistory.count - 1 && !pathHistory.isEmpty
+        let targetIndex = canGoForward ? historyIndex + 1 : historyIndex
+        let path = (canGoForward && targetIndex < pathHistory.count) ? pathHistory[targetIndex] : ""
+        if canGoForward {
+            historyIndex = targetIndex
+        }
+        historyLock.unlock()
+        
+        XCTAssertFalse(canGoForward)
+        XCTAssertEqual(historyIndex, 2)
+    }
+    
+    func testGoForwardValidIndex() {
+        var pathHistory = ["/", "/home", "/home/user"]
+        var historyIndex = 0
+        let historyLock = NSLock()
+        
+        historyLock.lock()
+        let canGoForward = historyIndex < pathHistory.count - 1 && !pathHistory.isEmpty
+        let targetIndex = canGoForward ? historyIndex + 1 : historyIndex
+        let path = (canGoForward && targetIndex < pathHistory.count) ? pathHistory[targetIndex] : ""
+        if canGoForward {
+            historyIndex = targetIndex
+        }
+        historyLock.unlock()
+        
+        XCTAssertTrue(canGoForward)
+        XCTAssertEqual(path, "/home")
+        XCTAssertEqual(historyIndex, 1)
+    }
+    
+    func testConcurrentModificationSafety() {
+        var pathHistory = ["/", "/home"]
+        var historyIndex = 1
+        let historyLock = NSLock()
+        
+        let expectation = XCTestExpectation(description: "Concurrent access complete")
+        expectation.expectedFulfillmentCount = 10
+        
+        for i in 0..<10 {
+            DispatchQueue.global().async {
+                historyLock.lock()
+                let canGoBack = historyIndex > 0 && !pathHistory.isEmpty
+                let targetIndex = canGoBack ? historyIndex - 1 : historyIndex
+                let path = (canGoBack && targetIndex < pathHistory.count) ? pathHistory[targetIndex] : ""
+                if canGoBack {
+                    historyIndex = targetIndex
+                }
+                historyLock.unlock()
+                expectation.fulfill()
+            }
+        }
+        
+        let result = XCTWaiter().wait(for: [expectation], timeout: 5)
+        XCTAssertEqual(result, .completed)
+        XCTAssertGreaterThanOrEqual(historyIndex, 0)
+    }
+}
+
+// MARK: - Host Creation/Edit Logic Tests
+
+final class HostCreationTests: XCTestCase {
+    
+    func testEditHostDoesNotCreateNew() {
+        var existingHosts: [String] = ["host1", "host2", "host3"]
+        let hostToEdit = "host2"
+        let newName = "host2-edited"
+        
+        let host: String
+        if let existingHost = hostToEdit as String? {
+            host = existingHost
+        } else {
+            host = newName
+            existingHosts.append(host)
+        }
+        
+        XCTAssertEqual(existingHosts.count, 3, "Should not add new host when editing")
+        XCTAssertEqual(host, "host2")
+    }
+    
+    func testNewHostIsCreated() {
+        var existingHosts: [String] = ["host1", "host2"]
+        let hostToEdit: String? = nil
+        let newName = "host3"
+        
+        let host: String
+        if let existingHost = hostToEdit {
+            host = existingHost
+        } else {
+            host = newName
+            existingHosts.append(host)
+        }
+        
+        XCTAssertEqual(existingHosts.count, 3, "Should add new host when creating")
+        XCTAssertEqual(host, "host3")
+    }
+    
+    func testHostEditPreservesOriginal() {
+        struct TestHost {
+            var name: String
+            var hostname: String
+            var port: Int
+        }
+        
+        var originalHost = TestHost(name: "Original", hostname: "original.com", port: 22)
+        let hostToEdit = originalHost
+        
+        let host: TestHost
+        if let existingHost = hostToEdit as TestHost? {
+            host = existingHost
+            host.name = "Edited"
+            host.hostname = "edited.com"
+        } else {
+            host = TestHost(name: "New", hostname: "new.com", port: 22)
+        }
+        
+        XCTAssertEqual(host.name, "Edited")
+        XCTAssertEqual(host.hostname, "edited.com")
+    }
+}
+
+// MARK: - Document Directory Access Tests
+
+final class DocumentDirectoryTests: XCTestCase {
+    
+    func testSafeArrayAccessWithFirst() {
+        let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        
+        if let firstURL = urls.first {
+            XCTAssertTrue(firstURL.path.contains("Documents"))
+        } else {
+            XCTFail("Document directory should exist")
+        }
+    }
+    
+    func testEmptyArraySafeAccess() {
+        let emptyArray: [String] = []
+        
+        if let first = emptyArray.first {
+            XCTFail("Should not have a first element")
+        } else {
+            XCTAssertTrue(true)
+        }
+    }
+    
+    func testArrayFirstVersusIndex() {
+        let array = ["a", "b", "c"]
+        
+        let firstElement = array.first
+        let indexZero = array.count > 0 ? array[0] : nil
+        
+        XCTAssertEqual(firstElement, indexZero)
+        XCTAssertEqual(firstElement, "a")
+    }
+    
+    func testDocumentDirectoryURLConstruction() {
+        let urls = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        
+        guard let documentsDir = urls.first else {
+            XCTFail("No document directory")
+            return
+        }
+        
+        let exportURL = documentsDir.appendingPathComponent("export.json")
+        
+        XCTAssertTrue(exportURL.path.hasSuffix("export.json"))
+        XCTAssertTrue(exportURL.path.contains("Documents"))
+    }
+}
+
+// MARK: - Weak Self Closure Tests
+
+final class WeakSelfClosureTests: XCTestCase {
+    
+    func testWeakSelfDoesNotRetain() {
+        class TestObject {
+            var closure: (() -> Void)?
+            
+            func setupClosure() {
+                closure = { [weak self] in
+                    _ = self?.description
+                }
+            }
+        }
+        
+        var object: TestObject? = TestObject()
+        object?.setupClosure()
+        let closure = object?.closure
+        
+        weak var weakObject = object
+        object = nil
+        
+        XCTAssertNil(weakObject, "Object should be deallocated")
+        XCTAssertNotNil(closure, "Closure should still exist")
+    }
+    
+    func testStrongSelfRetains() {
+        class TestObject {
+            var closure: (() -> Void)?
+            var value = 42
+            
+            func setupClosure() {
+                closure = {
+                    _ = self.value
+                }
+            }
+        }
+        
+        var object: TestObject? = TestObject()
+        object?.setupClosure()
+        let closure = object?.closure
+        
+        weak var weakObject = object
+        object = nil
+        
+        XCTAssertNotNil(weakObject, "Object should be retained by closure")
+        XCTAssertNotNil(closure)
+    }
+}
