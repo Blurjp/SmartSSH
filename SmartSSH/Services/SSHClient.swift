@@ -168,16 +168,19 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
             self.appendOutput("Authenticating as \(username)...\n")
 
             let authorized: Bool
-            if host.useKeyAuth {
+            if host.useKeyAuth, let publicKey, let privateKey {
                 print("[SSHClient] Attempting key authentication with key: \(keyName ?? "none")")
+                authorized = session.authenticateBy(inMemoryPublicKey: publicKey, privateKey: privateKey, andPassword: nil)
+            } else if host.useKeyAuth {
+                // Key auth was requested but key material is missing - fall back to password
                 let allKeys = SSHManager.shared.loadSavedKeys()
-                print("[SSHClient] Available keys in metadata: \(allKeys.map { $0.name })")
-                print("[SSHClient] publicKey loaded: \(publicKey != nil), privateKey loaded: \(privateKey != nil)")
-                guard let publicKey, let privateKey else {
+                print("[SSHClient] Key '\(keyName ?? "none")' not found (available: \(allKeys.map { $0.name })). Falling back to password auth.")
+                self.appendOutput("⚠️ SSH key '\(keyName ?? "selected key")' not found. Trying password...\n")
+                if let password, !password.isEmpty {
+                    authorized = session.authenticate(byPassword: password)
+                } else {
                     session.disconnect()
-                    let missing = [publicKey == nil ? "public key" : nil, privateKey == nil ? "private key" : nil]
-                        .compactMap { $0 }.joined(separator: " and ")
-                    let message = "Missing \(missing) for '\(keyName ?? "selected key")'. The key may have been deleted from the Keychain. Please re-add it in the Keys tab."
+                    let message = "SSH key '\(keyName ?? "selected key")' is missing and no password is configured. Re-add the key in the Keys tab or edit the host to use password auth."
                     print("[SSHClient] ERROR: \(message)")
                     DispatchQueue.main.async {
                         self.state = .error(message)
@@ -186,14 +189,12 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
                     completion(.failure(.authenticationFailed(message)))
                     return
                 }
-
-                authorized = session.authenticateBy(inMemoryPublicKey: publicKey, privateKey: privateKey, andPassword: nil)
             } else if let password, !password.isEmpty {
                 print("[SSHClient] Attempting password authentication")
                 authorized = session.authenticate(byPassword: password)
             } else {
                 session.disconnect()
-                let message = "No authentication method configured"
+                let message = "No authentication method configured. Add a password or SSH key to this host."
                 print("[SSHClient] ERROR: \(message)")
                 DispatchQueue.main.async {
                     self.state = .error(message)
