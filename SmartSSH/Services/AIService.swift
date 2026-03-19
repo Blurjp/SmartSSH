@@ -154,10 +154,12 @@ struct CommandExplanation: Identifiable {
     let risks: [String]
 }
 
-struct AIError: Error {
+struct AIError: Error, LocalizedError {
     let message: String
     
-    static let disabled = AIError(message: "AI features are disabled")
-    static let noAPIKey = AIError(message: "AI backend not configured")
-    static let networkError = AIError(message: "AI request failed")
+    static let disabled = AIError(message: "AI features require a Pro subscription. Upgrade to unlock command suggestions, error diagnosis, and more.")
+    static let noAPIKey = AIError(message: "AI backend is not configured. Please check your settings.")
+    static let networkError = AIError(message: "Unable to connect to AI service. Please check your internet connection.")
+    
+    var errorDescription: String? { message }
 }

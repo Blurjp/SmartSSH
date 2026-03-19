@@ -106,8 +106,12 @@ struct SnippetsView: View {
     }
 
     private func saveSnippets(_ snippets: [Snippet]) {
-        guard let data = try? JSONEncoder().encode(snippets) else { return }
-        UserDefaults.standard.set(data, forKey: snippetsDefaultsKey)
+        do {
+            let data = try JSONEncoder().encode(snippets)
+            UserDefaults.standard.set(data, forKey: snippetsDefaultsKey)
+        } catch {
+            print("Failed to save snippets: \(error.localizedDescription)")
+        }
     }
 
     private func snippetRow(_ snippet: Snippet) -> some View {

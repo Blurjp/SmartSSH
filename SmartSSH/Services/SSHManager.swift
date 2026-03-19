@@ -77,11 +77,16 @@ class SSHManager: ObservableObject {
 
     private let savedKeysDefaultsKey = "saved_ssh_keys"
     private let knownHostsDefaultsKey = "known_ssh_hosts"
+    private let inactiveSessionErrorFragment = "absence of an active session"
     
     @Published var activeSessions: [UUID: SSHSession] = [:]
     @Published var connectionStatus: [UUID: String] = [:]
     
     private let sessionQueue = DispatchQueue(label: "com.sshterminal.ssh", qos: .userInitiated)
+    
+    private var connectionTimeout: TimeInterval {
+        TimeInterval(UserDefaults.standard.integer(forKey: "connectionTimeout"))
+    }
     
     // MARK: - Connection
     
@@ -112,10 +117,14 @@ class SSHManager: ObservableObject {
         
         sessionQueue.async {
             let session = NMSSHSession(host: hostname, port: Int(host.port), andUsername: username)
-            session.timeout = 30
+            session.timeout = NSNumber(value: self.connectionTimeout)
 
             guard session.connect(), session.isConnected else {
-                let message = session.lastError?.localizedDescription ?? "Unable to connect"
+                let message = self.connectionFailureMessage(
+                    for: session,
+                    hostname: hostname,
+                    port: Int(host.port)
+                )
                 DispatchQueue.main.async {
                     self.connectionStatus[sessionId] = "error"
                     completion(.failure(.connectionFailed(message)))
@@ -169,7 +178,7 @@ class SSHManager: ObservableObject {
                 self.activeSessions[sessionId] = sshSession
                 self.connectionStatus[sessionId] = "connected"
                 
-                // Update host status
+                // Update host status on main thread
                 host.status = "connected"
                 host.lastConnectedAt = Date()
                 
@@ -179,15 +188,16 @@ class SSHManager: ObservableObject {
     }
     
     func disconnect(sessionId: UUID) {
-        guard var session = activeSessions[sessionId] else { return }
+        guard let session = activeSessions[sessionId] else { return }
         
         session.session.disconnect()
-        session.isConnected = false
-        activeSessions[sessionId] = nil
-        connectionStatus[sessionId] = "disconnected"
+        activeSessions.removeValue(forKey: sessionId)
+        connectionStatus.removeValue(forKey: sessionId)
         
-        // Update host status
-        session.host.status = "disconnected"
+        // Update host status on main thread
+        DispatchQueue.main.async {
+            session.host.status = "disconnected"
+        }
     }
     
     // MARK: - Command Execution
@@ -204,7 +214,7 @@ class SSHManager: ObservableObject {
         
         sessionQueue.async {
             var error: NSError?
-            let output = session.session.channel.execute(command, error: &error, timeout: 30) ?? ""
+            let output = session.session.channel.execute(command, error: &error, timeout: NSNumber(value: self.connectionTimeout)) ?? ""
 
             if let error {
                 DispatchQueue.main.async {
@@ -342,6 +352,14 @@ class SSHManager: ObservableObject {
         return .trustedFirstUse
     }
     
+    private func connectionFailureMessage(for session: NMSSHSession, hostname: String, port: Int) -> String {
+        if let rawMessage = session.lastError?.localizedDescription,
+           !rawMessage.localizedCaseInsensitiveContains(inactiveSessionErrorFragment) {
+            return rawMessage
+        }
+
+        return "Unable to connect to \(hostname):\(port). Check the host, port, and network reachability."
+    }
 }
 
 private extension SSHManager {

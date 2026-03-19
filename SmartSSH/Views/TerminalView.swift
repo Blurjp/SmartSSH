@@ -19,6 +19,8 @@ struct TerminalView: View {
     @AppStorage("terminalFontSize") private var fontSize = 14.0
     @FocusState private var isInputFocused: Bool
     
+    private let maxHistorySize = 100
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -52,7 +54,7 @@ struct TerminalView: View {
     private var statusBar: some View {
         HStack {
             Circle()
-                .fill(Color(sshClient.state.color))
+                .fill(Color.appNamed(sshClient.state.color))
                 .frame(width: 8, height: 8)
             
             Text(connectionStatusText)
@@ -252,8 +254,10 @@ struct TerminalView: View {
         let command = commandInput
         commandInput = ""
         
-        // Add to history
         commandHistory.insert(command, at: 0)
+        if commandHistory.count > maxHistorySize {
+            commandHistory = Array(commandHistory.prefix(maxHistorySize))
+        }
         historyIndex = -1
         
         // Handle special commands
@@ -273,12 +277,13 @@ struct TerminalView: View {
     }
     
     private func navigateHistory(direction: HistoryDirection) {
-        guard !commandHistory.isEmpty else { return }
+        guard !commandHistory.isEmpty, historyIndex >= -1 else { return }
         
         switch direction {
         case .up:
-            if historyIndex < commandHistory.count - 1 {
-                historyIndex += 1
+            let nextIndex = historyIndex + 1
+            if nextIndex < commandHistory.count {
+                historyIndex = nextIndex
                 commandInput = commandHistory[historyIndex]
             }
         case .down:

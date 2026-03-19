@@ -59,5 +59,7 @@
     <string>Use Face ID to unlock SmartSSH and protect your server credentials.</string>
     <key>NSCameraUsageDescription</key>
     <string>Allow SmartSSH to scan QR codes for quick host setup.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Allow SmartSSH to connect to SSH servers on your local network.</string>
 </dict>
 </plist>

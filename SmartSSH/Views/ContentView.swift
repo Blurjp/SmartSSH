@@ -29,8 +29,7 @@ struct ContentView: View {
                 SFTPView(),
                 requiredFeature: .sftpBrowser,
                 title: "Files",
-                systemImage: "folder",
-                tag: 2
+                systemImage: "folder"
             )
                 .tabItem {
                     Label("Files", systemImage: "folder")
@@ -47,8 +46,7 @@ struct ContentView: View {
                 SnippetsView(),
                 requiredFeature: .snippets,
                 title: "Snippets",
-                systemImage: "text.badge.plus",
-                tag: 4
+                systemImage: "text.badge.plus"
             )
                 .tabItem {
                     Label("Snippets", systemImage: "text.badge.plus")
@@ -73,8 +71,7 @@ struct ContentView: View {
         _ content: Content,
         requiredFeature: Feature,
         title: String,
-        systemImage: String,
-        tag: Int
+        systemImage: String
     ) -> some View {
         if subscriptionManager.hasAccess(to: requiredFeature) {
             content

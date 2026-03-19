@@ -15,7 +15,12 @@ class DataController: ObservableObject {
     @Published var persistentStoreErrorMessage: String?
     
     init(inMemory: Bool = false, cloudSyncEnabled: Bool = true) {
-        container = NSPersistentCloudKitContainer(name: "SmartSSH")
+        let modelLoadResult = Self.loadManagedObjectModel()
+        container = NSPersistentCloudKitContainer(
+            name: "SmartSSH",
+            managedObjectModel: modelLoadResult.model
+        )
+        persistentStoreErrorMessage = modelLoadResult.errorMessage
 
         if let description = container.persistentStoreDescriptions.first {
             if inMemory {
@@ -34,10 +39,30 @@ class DataController: ObservableObject {
                 DispatchQueue.main.async {
                     self.persistentStoreErrorMessage = error.localizedDescription
                 }
+                return
+            }
+
+            self.container.viewContext.automaticallyMergesChangesFromParent = true
+            self.container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        }
+    }
+
+    private static func loadManagedObjectModel() -> (model: NSManagedObjectModel, errorMessage: String?) {
+        let modelURLs = [
+            Bundle.main.url(forResource: "SmartSSH", withExtension: "momd"),
+            Bundle.main.url(forResource: "SmartSSH", withExtension: "mom")
+        ].compactMap { $0 }
+
+        for url in modelURLs {
+            if let model = NSManagedObjectModel(contentsOf: url) {
+                return (model, nil)
             }
         }
-        
-        container.viewContext.automaticallyMergesChangesFromParent = true
-        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+
+        if let model = NSManagedObjectModel.mergedModel(from: [Bundle.main]) {
+            return (model, nil)
+        }
+
+        fatalError("SmartSSH could not load its Core Data model from the app bundle. Please reinstall the app.")
     }
 }

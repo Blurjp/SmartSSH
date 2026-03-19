@@ -1,8 +1,22 @@
 platform :ios, '17.0'
 use_frameworks!
 
-target 'SmartSSH' do
+def shared_pods
   pod 'NMSSH', '~> 2.3'
+end
+
+target 'SmartSSH' do
+  pod 'SwiftNIO', '~> 2.65'
+  pod 'SwiftNIOSSH', '~> 0.13.0'
+  pod 'NIOSSH', '~> 0.13.0'
+end
+
+target 'SmartSSHTests' do
+  shared_pods
+end
+
+target 'SmartSSHUITests' do
+  shared_pods
 end
 
 post_install do |installer|

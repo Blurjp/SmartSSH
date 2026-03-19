@@ -452,32 +452,37 @@ struct SFTPView: View {
             let accessGranted = url.startAccessingSecurityScopedResource()
             let remotePath = (sftpClient.currentPath as NSString).appendingPathComponent(url.lastPathComponent)
             let localUploadURL = uploadStagingURL(for: url)
+            var cleanupScheduled = false
+
+            defer {
+                if accessGranted {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
 
             do {
                 if FileManager.default.fileExists(atPath: localUploadURL.path) {
                     try FileManager.default.removeItem(at: localUploadURL)
                 }
                 try FileManager.default.copyItem(at: url, to: localUploadURL)
+                cleanupScheduled = true
             } catch {
-                if accessGranted {
-                    url.stopAccessingSecurityScopedResource()
-                }
                 showAlert(error.localizedDescription)
                 return
             }
 
-            if accessGranted {
-                url.stopAccessingSecurityScopedResource()
-            }
-
-            sftpClient.uploadFile(localUploadURL.path, to: remotePath) { uploadResult in
+            sftpClient.uploadFile(localUploadURL.path, to: remotePath) { [localUploadURL] uploadResult in
                 try? FileManager.default.removeItem(at: localUploadURL)
                 switch uploadResult {
                 case .success:
-                    refreshList()
-                    showAlert("Uploaded \(url.lastPathComponent).")
+                    DispatchQueue.main.async {
+                        self.refreshList()
+                        self.showAlert("Uploaded \(url.lastPathComponent).")
+                    }
                 case .failure(let error):
-                    showAlert(error.localizedDescription)
+                    DispatchQueue.main.async {
+                        self.showAlert(error.localizedDescription)
+                    }
                 }
             }
         case .failure(let error):
@@ -513,7 +518,7 @@ struct FileRowView: View {
         HStack(spacing: 12) {
             Image(systemName: file.icon)
                 .font(.title2)
-                .foregroundStyle(Color(file.iconColor))
+                .foregroundStyle(Color.appNamed(file.iconColor))
                 .frame(width: 32)
             
             VStack(alignment: .leading, spacing: 4) {

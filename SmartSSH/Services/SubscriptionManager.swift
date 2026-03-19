@@ -78,9 +78,14 @@ class SubscriptionManager: ObservableObject {
     
     private var updateTask: Task<Void, Error>?
     private let isUITesting = ProcessInfo.processInfo.arguments.contains("--uitesting")
+    #if targetEnvironment(simulator)
+    private let shouldSkipStoreKitSetup = true
+    #else
+    private let shouldSkipStoreKitSetup = false
+    #endif
     
     init() {
-        guard !isUITesting else { return }
+        guard !isUITesting, !shouldSkipStoreKitSetup else { return }
 
         // Listen for transaction updates
         updateTask = listenForTransactions()
@@ -194,14 +199,16 @@ class SubscriptionManager: ObservableObject {
     
     private func listenForTransactions() -> Task<Void, Error> {
         return Task {
-            for await result in Transaction.updates {
-                do {
+            do {
+                for try await result in Transaction.updates {
                     let transaction = try self.checkVerified(result)
                     await self.updateCurrentSubscription()
                     await transaction.finish()
-                } catch {
-                    print("Transaction verification failed: \(error)")
                 }
+            } catch is CancellationError {
+                // Task was cancelled, exit gracefully
+            } catch {
+                print("Transaction listener error: \(error)")
             }
         }
     }

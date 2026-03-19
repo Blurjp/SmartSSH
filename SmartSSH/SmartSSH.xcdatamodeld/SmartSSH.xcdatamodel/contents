@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22225" systemVersion="23A344" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
-    <element name="Host" representedClassName="Host" syncable="YES">
+    <entity name="Host" representedClassName="Host" syncable="YES">
         <attribute name="color" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="group" optional="YES" attributeType="String"/>
@@ -10,14 +10,14 @@
         <attribute name="lastConnectedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="port" optional="YES" attributeType="Integer 16" defaultValueString="22" usesScalarValueType="YES"/>
-        <attribute name="snippets" optional="YES" attributeType="Transformable" customClassName="[String]"/>
+        <attribute name="snippets" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromData" customClassName="[String]"/>
         <attribute name="status" optional="YES" attributeType="String"/>
-        <attribute name="tags" optional="YES" attributeType="Transformable" customClassName="[String]"/>
+        <attribute name="tags" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromData" customClassName="[String]"/>
         <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="useKeyAuth" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="username" optional="YES" attributeType="String"/>
-    </element>
-    <element name="SSHKey" representedClassName="SSHKey" syncable="YES">
+    </entity>
+    <entity name="SSHKey" representedClassName="SSHKey" syncable="YES">
         <attribute name="comment" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="fingerprint" optional="YES" attributeType="String"/>
@@ -26,15 +26,15 @@
         <attribute name="privateKeyData" optional="YES" attributeType="Binary" allowsExternalBinaryDataStorage="YES"/>
         <attribute name="publicKey" optional="YES" attributeType="String"/>
         <attribute name="type" optional="YES" attributeType="String"/>
-    </element>
-    <element name="Snippet" representedClassName="Snippet" syncable="YES">
+    </entity>
+    <entity name="Snippet" representedClassName="Snippet" syncable="YES">
         <attribute name="command" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="desc" optional="YES" attributeType="String"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="lastUsedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="name" optional="YES" attributeType="String"/>
-        <attribute name="tags" optional="YES" attributeType="Transformable" customClassName="[String]"/>
+        <attribute name="tags" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromData" customClassName="[String]"/>
         <attribute name="useCount" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
-    </element>
+    </entity>
 </model>

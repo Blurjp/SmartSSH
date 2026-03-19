@@ -79,11 +79,13 @@ class SFTPClient: ObservableObject {
 
     private let unavailableMessage = "Connect to a host before starting an SFTP session."
     
+    private let historyLock = NSLock()
+    
     @Published var currentPath: String = "/"
     @Published var files: [SFTPFile] = []
     @Published var isLoading: Bool = false
-    @Published var pathHistory: [String] = ["/"]
-    @Published var historyIndex: Int = 0
+    @Published private(set) var pathHistory: [String] = ["/"]
+    @Published private(set) var historyIndex: Int = 0
     
     // MARK: - Directory Operations
     
@@ -93,7 +95,8 @@ class SFTPClient: ObservableObject {
             self.currentPath = path
         }
 
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
             guard let sftp = self.connectedSFTP() else {
                 DispatchQueue.main.async {
                     self.files = []
@@ -145,17 +148,31 @@ class SFTPClient: ObservableObject {
     }
     
     func goBack() {
-        if historyIndex > 0 {
-            historyIndex -= 1
-            let path = pathHistory[historyIndex]
+        historyLock.lock()
+        let canGoBack = historyIndex > 0
+        let targetIndex = canGoBack ? historyIndex - 1 : historyIndex
+        let path = canGoBack ? pathHistory[targetIndex] : ""
+        if canGoBack {
+            historyIndex = targetIndex
+        }
+        historyLock.unlock()
+        
+        if canGoBack {
             listDirectory(path) { _ in }
         }
     }
     
     func goForward() {
-        if historyIndex < pathHistory.count - 1 {
-            historyIndex += 1
-            let path = pathHistory[historyIndex]
+        historyLock.lock()
+        let canGoForward = historyIndex < pathHistory.count - 1
+        let targetIndex = canGoForward ? historyIndex + 1 : historyIndex
+        let path = canGoForward ? pathHistory[targetIndex] : ""
+        if canGoForward {
+            historyIndex = targetIndex
+        }
+        historyLock.unlock()
+        
+        if canGoForward {
             listDirectory(path) { _ in }
         }
     }
@@ -168,7 +185,9 @@ class SFTPClient: ObservableObject {
             return
         }
 
-        // Remove forward history when navigating to new path
+        historyLock.lock()
+        defer { historyLock.unlock() }
+
         if historyIndex < pathHistory.count - 1 {
             pathHistory = Array(pathHistory.prefix(historyIndex + 1))
         }
@@ -179,7 +198,8 @@ class SFTPClient: ObservableObject {
     // MARK: - File Operations
     
     func downloadFile(_ file: SFTPFile, to localPath: String, completion: @escaping (Result<Void, SFTPError>) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
             guard let sftp = self.connectedSFTP() else {
                 completion(.failure(.connectionFailed(self.unavailableMessage)))
                 return
@@ -202,7 +222,8 @@ class SFTPClient: ObservableObject {
     }
     
     func uploadFile(_ localPath: String, to remotePath: String, completion: @escaping (Result<Void, SFTPError>) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
             guard let sftp = self.connectedSFTP() else {
                 completion(.failure(.connectionFailed(self.unavailableMessage)))
                 return
@@ -219,7 +240,8 @@ class SFTPClient: ObservableObject {
     }
     
     func deleteFile(_ file: SFTPFile, completion: @escaping (Result<Void, SFTPError>) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
             guard let sftp = self.connectedSFTP() else {
                 completion(.failure(.connectionFailed(self.unavailableMessage)))
                 return
@@ -242,7 +264,8 @@ class SFTPClient: ObservableObject {
     }
     
     func createDirectory(name: String, completion: @escaping (Result<Void, SFTPError>) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
             guard let sftp = self.connectedSFTP() else {
                 completion(.failure(.connectionFailed(self.unavailableMessage)))
                 return
@@ -270,7 +293,8 @@ class SFTPClient: ObservableObject {
     }
     
     func renameFile(_ file: SFTPFile, newName: String, completion: @escaping (Result<Void, SFTPError>) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
             guard let sftp = self.connectedSFTP() else {
                 completion(.failure(.connectionFailed(self.unavailableMessage)))
                 return

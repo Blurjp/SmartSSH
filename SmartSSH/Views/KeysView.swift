@@ -16,12 +16,19 @@ struct KeysView: View {
     @State private var showingGenerateKey = false
     @State private var errorMessage = ""
     @State private var showingError = false
+    @State private var copiedMessage = ""
+    @State private var showingCopiedAlert = false
     
     var body: some View {
         NavigationStack {
             List {
                 ForEach(keys) { key in
-                    KeyRowView(key: key)
+                    KeyRowView(
+                        key: key,
+                        onCopyPublicKey: {
+                            copyPublicKey(key)
+                        }
+                    )
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 deleteKey(key)
@@ -46,7 +53,7 @@ struct KeysView: View {
                         Button {
                             showingGenerateKey = true
                         } label: {
-                            Label("Generate New Key", systemImage: "key.badge.plus")
+                            Label("Generate New Key", systemImage: "plus.circle")
                         }
                     } label: {
                         Image(systemName: "plus")
@@ -62,6 +69,11 @@ struct KeysView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(errorMessage)
+            }
+            .alert("Copied", isPresented: $showingCopiedAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(copiedMessage)
             }
             .onAppear(perform: loadKeys)
             .overlay {
@@ -88,6 +100,8 @@ struct KeysView: View {
     
     private func copyPublicKey(_ key: SavedSSHKey) {
         UIPasteboard.general.string = key.publicKey
+        copiedMessage = "Copied public key for \(key.name)."
+        showingCopiedAlert = true
     }
 
     private func loadKeys() {
@@ -97,6 +111,7 @@ struct KeysView: View {
 
 struct KeyRowView: View {
     let key: SavedSSHKey
+    let onCopyPublicKey: () -> Void
     
     var body: some View {
         HStack {
@@ -115,6 +130,18 @@ struct KeyRowView: View {
             }
             
             Spacer()
+
+            Menu {
+                Button {
+                    onCopyPublicKey()
+                } label: {
+                    Label("Copy Public Key", systemImage: "doc.on.doc")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
             
             Text(key.createdAt, style: .date)
                 .font(.caption2)

@@ -23,7 +23,7 @@ struct SmartSSHApp: App {
             controller = DataController(inMemory: true, cloudSyncEnabled: false)
         } else {
             #if targetEnvironment(simulator)
-            controller = DataController(inMemory: false, cloudSyncEnabled: false)
+            controller = DataController(inMemory: true, cloudSyncEnabled: false)
             #else
             controller = DataController.shared
             #endif

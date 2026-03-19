@@ -28,15 +28,26 @@ struct AddHostView: View {
     @State private var availableKeys: [SavedSSHKey] = []
     
     @FocusState private var focusedField: Field?
+
+    let hostToEdit: Host?
     
     enum Field: Hashable {
         case name, hostname, port, username, password
     }
     
     let colors = ["blue", "green", "orange", "purple", "red", "pink", "yellow", "gray"]
+
+    init(hostToEdit: Host? = nil) {
+        self.hostToEdit = hostToEdit
+    }
     
-    var isValid: Bool {
-        !name.isEmpty && !hostname.isEmpty && !username.isEmpty && (!useKeyAuth || !selectedKey.isEmpty)
+    private var isValid: Bool {
+        !name.isEmpty && !hostname.isEmpty && !username.isEmpty && validPort != nil && (!useKeyAuth || !selectedKey.isEmpty)
+    }
+    
+    private var validPort: Int16? {
+        guard let portInt = Int16(port), portInt >= 1, portInt <= 65535 else { return nil }
+        return portInt
     }
     
     var body: some View {
@@ -48,7 +59,7 @@ struct AddHostView: View {
                 testConnectionSection
             }
             .formStyle(.grouped)
-            .navigationTitle("Add Host")
+            .navigationTitle(hostToEdit == nil ? "Add Host" : "Edit Host")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -75,7 +86,10 @@ struct AddHostView: View {
             } message: {
                 Text("Connection test successful!")
             }
-            .onAppear(perform: loadKeys)
+            .onAppear {
+                loadKeys()
+                populateFormIfNeeded()
+            }
         }
     }
     
@@ -125,7 +139,7 @@ struct AddHostView: View {
                 
                 Stepper("", value: Binding(
                     get: { Int(port) ?? 22 },
-                    set: { port = String($0) }
+                    set: { newValue in port = String(newValue) }
                 ), in: 1...65535)
                 .labelsHidden()
             }
@@ -196,7 +210,7 @@ struct AddHostView: View {
                 ForEach(colors, id: \.self) { color in
                     HStack {
                         Circle()
-                            .fill(Color(color))
+                            .fill(Color.appNamed(color))
                             .frame(width: 12, height: 12)
                         Text(color.capitalized)
                     }
@@ -238,11 +252,12 @@ struct AddHostView: View {
     private func testConnection() {
         isTesting = true
 
+        let portValue = validPort ?? 22
         guard let tempHost = Host.createTransient(
             using: viewContext,
             name: name,
             hostname: hostname,
-            port: Int16(port) ?? 22,
+            port: portValue,
             username: username,
             password: useKeyAuth ? nil : password,
             keyFingerprint: useKeyAuth ? selectedKey : nil,
@@ -272,16 +287,35 @@ struct AddHostView: View {
     }
     
     private func saveHost() {
-        let host = Host.create(
+        let portValue = validPort ?? 22
+        let host = hostToEdit ?? Host.create(
             in: viewContext,
             name: name,
             hostname: hostname,
-            port: Int16(port) ?? 22,
+            port: portValue,
             username: username,
             password: useKeyAuth ? nil : password,
             keyFingerprint: useKeyAuth ? selectedKey : nil,
             group: group.isEmpty ? nil : group
         )
+
+        if hostToEdit != nil {
+            host.name = name
+            host.hostname = hostname
+            host.port = portValue
+            host.username = username
+            host.keyFingerprint = useKeyAuth ? selectedKey : nil
+            host.group = group.isEmpty ? nil : group
+            host.useKeyAuth = useKeyAuth
+            host.updatedAt = Date()
+
+            if useKeyAuth {
+                host.password = nil
+            } else {
+                host.password = password.isEmpty ? nil : password
+            }
+        }
+
         host.color = color
         
         do {
@@ -298,6 +332,20 @@ struct AddHostView: View {
         if !availableKeys.contains(where: { $0.name == selectedKey }) {
             selectedKey = ""
         }
+    }
+
+    private func populateFormIfNeeded() {
+        guard let hostToEdit, name.isEmpty, hostname.isEmpty, username.isEmpty else { return }
+
+        name = hostToEdit.wrappedName
+        hostname = hostToEdit.wrappedHostname
+        port = String(hostToEdit.port)
+        username = hostToEdit.wrappedUsername
+        password = hostToEdit.useKeyAuth ? "" : (hostToEdit.password ?? "")
+        group = hostToEdit.group ?? ""
+        color = hostToEdit.color ?? "blue"
+        useKeyAuth = hostToEdit.useKeyAuth
+        selectedKey = hostToEdit.keyFingerprint ?? ""
     }
 }
 

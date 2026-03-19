@@ -14,16 +14,13 @@ import UIKit
 
 struct HostsView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \Host.name, ascending: true)],
-        animation: .default)
-    private var hosts: FetchedResults<Host>
-    
+    @State private var hosts: [Host] = []
     @State private var showingAddHost = false
     @State private var searchText = ""
     @State private var selectedHost: Host?
     @State private var showingConnectionAlert = false
     @State private var connectionMessage = ""
+    @State private var fetchErrorMessage: String?
     
     var filteredHosts: [Host] {
         if searchText.isEmpty {
@@ -77,13 +74,27 @@ struct HostsView: View {
                     addButton
                 }
             }
-            .sheet(isPresented: $showingAddHost) {
+            .task {
+                loadHosts()
+            }
+            .sheet(isPresented: $showingAddHost, onDismiss: loadHosts) {
                 AddHostView()
+            }
+            .sheet(item: $selectedHost, onDismiss: loadHosts) { host in
+                AddHostView(hostToEdit: host)
             }
             .alert("Connection Status", isPresented: $showingConnectionAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(connectionMessage)
+            }
+            .alert("Storage Error", isPresented: Binding(
+                get: { fetchErrorMessage != nil },
+                set: { if !$0 { fetchErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(fetchErrorMessage ?? "")
             }
         }
     }
@@ -195,6 +206,32 @@ struct HostsView: View {
     }
     
     // MARK: - Actions
+
+    private func loadHosts() {
+        guard let entity = NSEntityDescription.entity(forEntityName: "Host", in: viewContext) else {
+            hosts = []
+            fetchErrorMessage = "The Core Data model is missing the 'Host' entity in this build."
+            return
+        }
+
+        let request = Host.fetchRequest()
+        request.entity = entity
+        request.sortDescriptors = [
+            NSSortDescriptor(
+                key: "name",
+                ascending: true,
+                selector: #selector(NSString.localizedCaseInsensitiveCompare(_:))
+            )
+        ]
+
+        do {
+            hosts = try viewContext.fetch(request)
+            fetchErrorMessage = nil
+        } catch {
+            hosts = []
+            fetchErrorMessage = error.localizedDescription
+        }
+    }
     
     private func connect(to host: Host) {
         // Update host status
@@ -221,10 +258,16 @@ struct HostsView: View {
             viewContext.delete(host)
             do {
                 try viewContext.save()
+                hosts.removeAll { $0.objectID == host.objectID }
             } catch {
-                print("Failed to delete host: \(error)")
+                showAlert("Failed to delete host: \(error.localizedDescription)")
             }
         }
+    }
+    
+    private func showAlert(_ message: String) {
+        alertMessage = message
+        showingAlert = true
     }
     
     private func copyConnectionInfo(_ host: Host) {
@@ -244,12 +287,12 @@ struct HostRowView: View {
             // Status icon with animation
             ZStack {
                 Circle()
-                    .fill(Color(host.statusColor).opacity(0.2))
+                    .fill(Color.appNamed(host.statusColor).opacity(0.2))
                     .frame(width: 40, height: 40)
                 
                 Image(systemName: statusIcon)
                     .font(.title3)
-                    .foregroundStyle(Color(host.color ?? "blue"))
+                    .foregroundStyle(Color.appNamed(host.color ?? "blue"))
             }
             
             // Host info
@@ -269,12 +312,12 @@ struct HostRowView: View {
             // Status indicator
             VStack(alignment: .trailing, spacing: 4) {
                 Circle()
-                    .fill(Color(host.statusColor))
+                    .fill(Color.appNamed(host.statusColor))
                     .frame(width: 10, height: 10)
                     .animation(.easeInOut, value: host.status)
                 
-                if host.lastConnectedAt != nil {
-                    Text(host.lastConnectedAt!, style: .relative)
+                if let lastConnected = host.lastConnectedAt {
+                    Text(lastConnected, style: .relative)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
