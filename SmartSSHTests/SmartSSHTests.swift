@@ -354,7 +354,7 @@ final class PortValidationTests: XCTestCase {
     func testPortMaximumBoundary() {
         let port = "65535"
         let portInt = Int16(port)
-        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= 65535) ? portInt : nil
+        let validPort = (portInt != nil && portInt! >= 1 && portInt! <= Int16(65535)) ? portInt : nil
         
         XCTAssertNotNil(validPort)
         XCTAssertEqual(validPort, 65535)
