@@ -149,30 +149,30 @@ class SFTPClient: ObservableObject {
     
     func goBack() {
         historyLock.lock()
-        let canGoBack = historyIndex > 0
+        let canGoBack = historyIndex > 0 && !pathHistory.isEmpty
         let targetIndex = canGoBack ? historyIndex - 1 : historyIndex
-        let path = canGoBack ? pathHistory[targetIndex] : ""
+        let path = (canGoBack && targetIndex < pathHistory.count) ? pathHistory[targetIndex] : ""
         if canGoBack {
             historyIndex = targetIndex
         }
         historyLock.unlock()
         
-        if canGoBack {
+        if canGoBack && !path.isEmpty {
             listDirectory(path) { _ in }
         }
     }
     
     func goForward() {
         historyLock.lock()
-        let canGoForward = historyIndex < pathHistory.count - 1
+        let canGoForward = historyIndex < pathHistory.count - 1 && !pathHistory.isEmpty
         let targetIndex = canGoForward ? historyIndex + 1 : historyIndex
-        let path = canGoForward ? pathHistory[targetIndex] : ""
+        let path = (canGoForward && targetIndex < pathHistory.count) ? pathHistory[targetIndex] : ""
         if canGoForward {
             historyIndex = targetIndex
         }
         historyLock.unlock()
         
-        if canGoForward {
+        if canGoForward && !path.isEmpty {
             listDirectory(path) { _ in }
         }
     }

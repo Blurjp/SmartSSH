@@ -288,18 +288,10 @@ struct AddHostView: View {
     
     private func saveHost() {
         let portValue = validPort ?? 22
-        let host = hostToEdit ?? Host.create(
-            in: viewContext,
-            name: name,
-            hostname: hostname,
-            port: portValue,
-            username: username,
-            password: useKeyAuth ? nil : password,
-            keyFingerprint: useKeyAuth ? selectedKey : nil,
-            group: group.isEmpty ? nil : group
-        )
-
-        if hostToEdit != nil {
+        
+        let host: Host
+        if let existingHost = hostToEdit {
+            host = existingHost
             host.name = name
             host.hostname = hostname
             host.port = portValue
@@ -314,6 +306,17 @@ struct AddHostView: View {
             } else {
                 host.password = password.isEmpty ? nil : password
             }
+        } else {
+            host = Host.create(
+                in: viewContext,
+                name: name,
+                hostname: hostname,
+                port: portValue,
+                username: username,
+                password: useKeyAuth ? nil : password,
+                keyFingerprint: useKeyAuth ? selectedKey : nil,
+                group: group.isEmpty ? nil : group
+            )
         }
 
         host.color = color

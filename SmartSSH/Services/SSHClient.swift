@@ -345,7 +345,7 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
         var result: String?
         var finished = false
 
-        connection.stateUpdateHandler = { [weak connection] state in
+        connection.stateUpdateHandler = { [weak self, weak connection] state in
             resultLock.lock()
             defer { resultLock.unlock() }
 
@@ -358,11 +358,11 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
                 semaphore.signal()
             case .failed(let error):
                 finished = true
-                result = self.preflightMessage(for: error, hostname: hostname, port: port)
+                result = self?.preflightMessage(for: error, hostname: hostname, port: port)
                 semaphore.signal()
             case .waiting(let error):
                 finished = true
-                result = self.preflightMessage(for: error, hostname: hostname, port: port)
+                result = self?.preflightMessage(for: error, hostname: hostname, port: port)
                 semaphore.signal()
             case .cancelled:
                 finished = true

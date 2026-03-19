@@ -402,8 +402,11 @@ struct SFTPView: View {
     }
     
     private func downloadFile(_ file: SFTPFile) {
-        let destination = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(file.name)
+        guard let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            showAlert("Unable to access Documents directory.")
+            return
+        }
+        let destination = documentsDir.appendingPathComponent(file.name)
 
         sftpClient.downloadFile(file, to: destination.path) { result in
             switch result {

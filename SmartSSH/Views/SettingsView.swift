@@ -229,7 +229,7 @@ struct SettingsView: View {
     }
 
     private func exportURL() -> URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             .appendingPathComponent("smartssh-export.json")
     }
 
