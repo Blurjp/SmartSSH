@@ -20,6 +20,7 @@ struct AddHostView: View {
     @State private var color = "blue"
     @State private var useKeyAuth = false
     @State private var selectedKey = ""
+    @State private var passwordVisible = false
     
     @State private var isTesting = false
     @State private var showingError = false
@@ -180,10 +181,27 @@ struct AddHostView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 24)
                     
-                    SecureField("Password", text: $password)
-                        .textContentType(.password)
-                        .accessibilityIdentifier("addHost.password")
-                        .focused($focusedField, equals: .password)
+                    if passwordVisible {
+                        TextField("Password", text: $password)
+                            .textContentType(.password)
+                            .autocapitalization(.none)
+                            .autocorrectionDisabled()
+                            .accessibilityIdentifier("addHost.password")
+                            .focused($focusedField, equals: .password)
+                    } else {
+                        SecureField("Password", text: $password)
+                            .textContentType(.password)
+                            .accessibilityIdentifier("addHost.password")
+                            .focused($focusedField, equals: .password)
+                    }
+                    
+                    Button {
+                        passwordVisible.toggle()
+                    } label: {
+                        Image(systemName: passwordVisible ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         } header: {

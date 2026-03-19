@@ -29,6 +29,7 @@ struct HostsView: View {
     @State private var showingCredentialPrompt = false
     @State private var promptUsername = ""
     @State private var promptPassword = ""
+    @State private var promptPasswordVisible = false
     
     var filteredHosts: [Host] {
         if searchText.isEmpty {
@@ -237,8 +238,22 @@ struct HostsView: View {
                         Image(systemName: "lock")
                             .foregroundStyle(.secondary)
                             .frame(width: 24)
-                        SecureField("Password", text: $promptPassword)
-                            .textContentType(.password)
+                        if promptPasswordVisible {
+                            TextField("Password", text: $promptPassword)
+                                .textContentType(.password)
+                                .autocapitalization(.none)
+                                .autocorrectionDisabled()
+                        } else {
+                            SecureField("Password", text: $promptPassword)
+                                .textContentType(.password)
+                        }
+                        Button {
+                            promptPasswordVisible.toggle()
+                        } label: {
+                            Image(systemName: promptPasswordVisible ? "eye.slash" : "eye")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
                     }
                 } header: {
                     if let host = pendingHost {
