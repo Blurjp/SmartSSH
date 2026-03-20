@@ -2,7 +2,7 @@
 //  TerminalView.swift
 //  SSH Terminal
 //
-//  SSH Terminal view with improved UX
+//  SSH Terminal view with inline input (UITextView-based)
 //
 
 import SwiftUI
@@ -13,36 +13,22 @@ import UIKit
 
 struct TerminalView: View {
     @ObservedObject private var sshClient = SSHClient.shared
-    @State private var commandInput = ""
-    @State private var commandHistory: [String] = []
-    @State private var historyIndex = -1
     @AppStorage("terminalFontSize") private var fontSize = 14.0
-    @FocusState private var isInputFocused: Bool
 
-    // Performance optimization: Limit terminal output size
-    @State private var displayedOutput: String = ""
-    private let maxOutputLines = 1000
-    private let maxHistorySize = 100
-    
     var body: some View {
         NavigationStack {
-            GeometryReader { geometry in
-                VStack(spacing: 0) {
-                    if sshClient.isConnected {
-                        statusBar
-                    }
-                    
-                    terminalOutput
-                    
-                    commandInputBar
+            VStack(spacing: 0) {
+                if sshClient.isConnected {
+                    statusBar
                 }
-                .onAppear {
-                    updateTerminalSize(for: geometry.size)
-                }
-                .onChange(of: geometry.size) { _, newSize in
-                    updateTerminalSize(for: newSize)
-                }
+
+                // Single unified terminal view with inline input
+                TerminalTextView(
+                    sshClient: sshClient,
+                    fontSize: fontSize
+                )
             }
+            .background(Color.black)
             .navigationTitle("Terminal")
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -56,15 +42,15 @@ struct TerminalView: View {
             }
         }
     }
-    
+
     // MARK: - View Components
-    
+
     private var statusBar: some View {
         HStack {
             Circle()
                 .fill(Color.appNamed(sshClient.state.color))
                 .frame(width: 8, height: 8)
-            
+
             Text(connectionStatusText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -78,9 +64,9 @@ struct TerminalView: View {
                     .foregroundStyle(sshClient.isShellActive ? .green : .yellow)
                     .clipShape(Capsule())
             }
-            
+
             Spacer()
-            
+
             if let host = sshClient.host {
                 Text(host.displayInfo)
                     .font(.caption)
@@ -91,7 +77,7 @@ struct TerminalView: View {
         .padding(.vertical, 8)
         .background(Color(.systemGray6))
     }
-    
+
     private var connectionStatusText: String {
         switch sshClient.state {
         case .connecting: return "Connecting..."
@@ -101,124 +87,7 @@ struct TerminalView: View {
         case .error(let msg): return "Error: \(msg)"
         }
     }
-    
-    private var terminalOutput: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    // Welcome message
-                    if displayedOutput.isEmpty {
-                        welcomeMessage
-                    } else {
-                        Text(displayedOutput)
-                            .font(.system(size: fontSize, design: .monospaced))
-                            .foregroundStyle(.green)
-                            .textSelection(.enabled)
-                    }
 
-                    Color.clear
-                        .frame(height: 1)
-                        .id("bottom")
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-            }
-            .background(Color.black)
-            .onChange(of: sshClient.output) { oldValue, newValue in
-                // Optimize: Only update if content actually changed
-                if oldValue != newValue {
-                    updateDisplayedOutput()
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        proxy.scrollTo("bottom", anchor: .bottom)
-                    }
-                }
-            }
-        }
-        .onAppear {
-            updateDisplayedOutput()
-        }
-    }
-
-    // Limit output size for performance
-    private func updateDisplayedOutput() {
-        let lines = sshClient.output.components(separatedBy: .newlines)
-        if lines.count > maxOutputLines {
-            let truncated = lines.suffix(maxOutputLines).joined(separator: "\n")
-            displayedOutput = truncated
-        } else {
-            displayedOutput = sshClient.output
-        }
-    }
-    
-    private var welcomeMessage: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Welcome to SSH Terminal")
-                .font(.system(size: fontSize + 2, design: .monospaced))
-                .fontWeight(.bold)
-                .foregroundStyle(.green)
-            
-            Text("Type a command and press Enter to execute.")
-                .font(.system(size: fontSize, design: .monospaced))
-                .foregroundStyle(.secondary)
-            
-            Text("\nQuick Commands:")
-                .font(.system(size: fontSize, design: .monospaced))
-                .foregroundStyle(.yellow)
-            
-            ForEach(["ls -la", "pwd", "whoami", "df -h"], id: \.self) { cmd in
-                Button {
-                    commandInput = cmd
-                    executeCommand()
-                } label: {
-                    Text("  \(cmd)")
-                        .font(.system(size: fontSize, design: .monospaced))
-                        .foregroundStyle(sshClient.isConnected ? .cyan : .gray)
-                }
-                .disabled(!sshClient.isConnected)
-            }
-        }
-    }
-    
-    private var commandInputBar: some View {
-        HStack(spacing: 8) {
-            // Prompt
-            Text("$")
-                .font(.system(size: fontSize, design: .monospaced))
-                .foregroundStyle(.green)
-                .fontWeight(.bold)
-            
-            // Input field
-            TextField("Enter command...", text: $commandInput)
-                .font(.system(size: fontSize, design: .monospaced))
-                .textFieldStyle(.plain)
-                .foregroundStyle(.white)
-                .focused($isInputFocused)
-                .onSubmit {
-                    executeCommand()
-                }
-                .onKeyPress(.upArrow) {
-                    navigateHistory(direction: .up)
-                    return .handled
-                }
-                .onKeyPress(.downArrow) {
-                    navigateHistory(direction: .down)
-                    return .handled
-                }
-            
-            // Send button
-            Button {
-                executeCommand()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(commandInput.isEmpty ? .gray : .green)
-            }
-            .disabled(commandInput.isEmpty)
-        }
-        .padding()
-        .background(Color.black)
-    }
-    
     private var toolbarMenu: some View {
         Menu {
             // Font size controls
@@ -236,25 +105,25 @@ struct TerminalView: View {
             } label: {
                 Label("Font Size", systemImage: "textformat.size")
             }
-            
+
             Divider()
-            
+
             // Clear output
             Button {
                 sshClient.clearOutput()
             } label: {
                 Label("Clear Output", systemImage: "trash")
             }
-            
+
             // Export log
             Button {
                 exportLog()
             } label: {
                 Label("Export Log", systemImage: "square.and.arrow.up")
             }
-            
+
             Divider()
-            
+
             // Disconnect
             if sshClient.isConnected {
                 Button(role: .destructive) {
@@ -267,7 +136,7 @@ struct TerminalView: View {
             Image(systemName: "ellipsis.circle")
         }
     }
-    
+
     private var disconnectedOverlay: some View {
         ContentUnavailableView {
             Label("No Active Session", systemImage: "terminal")
@@ -281,83 +150,306 @@ struct TerminalView: View {
         }
         .background(Color.black)
     }
-    
+
     // MARK: - Actions
-    
-    private func executeCommand() {
-        guard !commandInput.isEmpty else { return }
-        
-        let command = commandInput
-        commandInput = ""
-        
-        commandHistory.insert(command, at: 0)
-        if commandHistory.count > maxHistorySize {
-            commandHistory = Array(commandHistory.prefix(maxHistorySize))
-        }
-        historyIndex = -1
-        
-        // Handle special commands
-        if command.lowercased() == "clear" {
-            sshClient.clearOutput()
-            return
-        }
-        
-        // Execute command
-        sshClient.execute(command: command) { result in
-            // Command execution complete
-        }
-    }
-    
-    private enum HistoryDirection {
-        case up, down
-    }
-    
-    private func navigateHistory(direction: HistoryDirection) {
-        guard !commandHistory.isEmpty, historyIndex >= -1 else { return }
-        
-        switch direction {
-        case .up:
-            let nextIndex = historyIndex + 1
-            if nextIndex < commandHistory.count {
-                historyIndex = nextIndex
-                commandInput = commandHistory[historyIndex]
-            }
-        case .down:
-            if historyIndex > 0 {
-                historyIndex -= 1
-                commandInput = commandHistory[historyIndex]
-            } else if historyIndex == 0 {
-                historyIndex = -1
-                commandInput = ""
-            }
-        }
-    }
-    
+
     private func exportLog() {
         let activityVC = UIActivityViewController(
             activityItems: [sshClient.output],
             applicationActivities: nil
         )
-        
+
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let rootViewController = windowScene.windows.first?.rootViewController {
             rootViewController.present(activityVC, animated: true)
         }
     }
+}
 
-    private func updateTerminalSize(for size: CGSize) {
-        let gridSize = Self.terminalGridSize(for: size, fontSize: fontSize)
-        let width = gridSize.width
-        let height = gridSize.height
-        sshClient.requestTerminalSize(width: width, height: height)
+// MARK: - Terminal TextView (UIViewRepresentable)
+
+struct TerminalTextView: UIViewRepresentable {
+    @ObservedObject var sshClient: SSHClient
+    let fontSize: Double
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        textView.backgroundColor = .black
+        textView.textColor = .green
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.autocapitalizationType = .none
+        textView.autocorrectionType = .no
+        textView.smartDashesType = .no
+        textView.smartQuotesType = .no
+        textView.spellCheckingType = .no
+        textView.keyboardDismissMode = .interactive
+        textView.indicatorStyle = .white
+
+        // Content inset for better visibility
+        textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+
+        textView.delegate = context.coordinator
+
+        // Store reference
+        context.coordinator.textView = textView
+
+        // Initial content
+        context.coordinator.updateInitialState()
+
+        return textView
     }
 
-    static func terminalGridSize(for size: CGSize, fontSize: Double) -> (width: Int, height: Int) {
-        let width = max(Int(size.width / max(fontSize * 0.62, 1)), 40)
-        let height = max(Int(size.height / max(fontSize * 1.6, 1)), 12)
-        return (width, height)
+    func updateUIView(_ textView: UITextView, context: Context) {
+        // Update font size if changed
+        if CGFloat(fontSize) != textView.font?.pointSize {
+            textView.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        }
+
+        // Update output when it changes
+        context.coordinator.checkForOutputUpdates()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(sshClient: sshClient)
     }
 }
+
+// MARK: - Coordinator
+
+class Coordinator: NSObject, UITextViewDelegate {
+    var textView: UITextView?
+    let sshClient: SSHClient
+
+    // Track output state
+    private var lastProcessedOutput: String = ""
+    private var processedLength: Int = 0
+
+    // Command history
+    private var commandHistory: [String] = []
+    private var historyIndex: Int = -1
+    private let maxHistorySize = 100
+
+    // Track prompt position
+    private var promptRange: NSRange?
+
+    // Initialize terminal size
+    private var terminalWidth: Int = 80
+    private var terminalHeight: Int = 24
+
+    init(sshClient: SSHClient) {
+        self.sshClient = sshClient
+        super.init()
+
+        // Observe output changes
+        sshClient.objectWillChange.sink { [weak self] _ in
+            self?.updateOutputIfNeeded()
+        }.store(in: &cancellables)
+    }
+
+    private var cancellables: Set<AnyCancellable> = []
+
+    // MARK: - UITextViewDelegate
+
+    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        // Handle Enter key - execute command
+        if text == "\n" {
+            executeCurrentCommand(textView)
+            return false
+        }
+
+        // Prevent editing before the prompt (protect existing output)
+        if let promptRange = promptRange {
+            if range.location < promptRange.location {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    func textViewDidChange(_ textView: UITextView) {
+        // Update prompt range as user types
+        updatePromptRange()
+    }
+
+    func textViewDidBeginEditing(_ textView: UITextView) {
+        // Ensure cursor is at the end when editing begins
+        if let text = textView.text, !text.isEmpty {
+            textView.selectedRange = NSRange(location: text.utf16.count, length: 0)
+        }
+    }
+
+    // MARK: - Command Execution
+
+    private func executeCurrentCommand(_ textView: UITextView) {
+        guard let promptRange = promptRange else { return }
+
+        // Extract command text (everything after prompt)
+        let fullText = textView.text ?? ""
+        let startIndex = fullText.index(fullText.startIndex, offsetBy: promptRange.location + promptRange.length)
+        let commandText = String(fullText[startIndex...]).trimmingCharacters(in: .newlines)
+
+        // Clear empty commands or add to history
+        if !commandText.isEmpty {
+            // Add to history
+            commandHistory.insert(commandText, at: 0)
+            if commandHistory.count > maxHistorySize {
+                commandHistory = Array(commandHistory.prefix(maxHistorySize))
+            }
+            historyIndex = -1
+
+            // Execute command via SSH client
+            sshClient.execute(command: commandText) { [weak self] result in
+                // Command completed - output will be updated via observer
+            }
+        }
+
+        // Reset history index
+        historyIndex = -1
+
+        // Update terminal size
+        updateTerminalSize()
+    }
+
+    // MARK: - Output Management
+
+    func checkForOutputUpdates() {
+        updateOutputIfNeeded()
+    }
+
+    private func updateOutputIfNeeded() {
+        guard let textView = textView else { return }
+
+        let currentOutput = sshClient.output
+
+        // Only update if output has changed
+        if currentOutput != lastProcessedOutput {
+            lastProcessedOutput = currentOutput
+
+            // Calculate new content to append
+            let newContent = String(currentOutput.dropFirst(processedLength))
+            if !newContent.isEmpty {
+                appendOutput(newContent)
+                processedLength = currentOutput.count
+            }
+        }
+    }
+
+    private func appendOutput(_ text: String) {
+        guard let textView = textView, !text.isEmpty else { return }
+
+        // Save current selected range
+        let wasEditing = textView.isFirstResponder
+        let currentRange = textView.selectedRange
+
+        // Append new text
+        let currentText = textView.text ?? ""
+        textView.text = currentText + text
+
+        // Update prompt range
+        updatePromptRange()
+
+        // Auto-scroll to bottom if not manually scrolling
+        if wasEditing || currentRange.location == currentText.utf16.count {
+            scrollToBottom()
+        }
+
+        // Restore editing state
+        if wasEditing {
+            textView.becomeFirstResponder()
+        }
+    }
+
+    private func updatePromptRange() {
+        guard let textView = textView, let text = textView.text else { return }
+
+        // Find the last prompt position (last "$ " or "# " in the text)
+        let nsString = text as NSString
+        let promptPatterns = ["$ ", "# ", "➜ "]
+
+        var lastPromptLocation: Int?
+        for pattern in promptPatterns {
+            let range = nsString.range(of: pattern, options: .backwards)
+            if range.location != NSNotFound {
+                if lastPromptLocation == nil || range.location > lastPromptLocation! {
+                    lastPromptLocation = range.location
+                    promptRange = NSRange(location: range.location, length: pattern.count)
+                }
+            }
+        }
+    }
+
+    private func scrollToBottom() {
+        guard let textView = textView, let text = textView.text else { return }
+        let bottomRange = NSRange(location: text.utf16.count, length: 0)
+        textView.scrollRangeToVisible(bottomRange)
+    }
+
+    // MARK: - Initial State
+
+    func updateInitialState() {
+        guard let textView = textView else { return }
+
+        lastProcessedOutput = sshClient.output
+        processedLength = sshClient.output.count
+
+        // Set initial text
+        if !sshClient.output.isEmpty {
+            textView.text = sshClient.output
+        } else {
+            // Show welcome message
+            let welcome = """
+            Welcome to SSH Terminal
+            Type a command and press Enter to execute.
+
+            Quick Commands:
+              ls -la    - List files
+              pwd       - Print working directory
+              whoami    - Show current user
+              df -h     - Disk usage
+
+            """
+            textView.text = welcome
+            lastProcessedOutput = welcome
+            processedLength = welcome.count
+        }
+
+        updatePromptRange()
+        scrollToBottom()
+
+        // Request keyboard focus
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak textView] in
+            textView?.becomeFirstResponder()
+        }
+    }
+
+    // MARK: - Terminal Size
+
+    private func updateTerminalSize() {
+        guard let textView = textView else { return }
+
+        // Calculate terminal grid size
+        let font = textView.font ?? UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        let charWidth = "x".size(withAttributes: [.font: font]).width
+        let charHeight = font.lineHeight
+
+        let bounds = textView.bounds.inset(by: textView.textContainerInset)
+        let width = Int(max(40, bounds.width / charWidth))
+        let height = Int(max(12, bounds.height / charHeight))
+
+        terminalWidth = width
+        terminalHeight = height
+
+        // Notify SSH client of new size
+        sshClient.requestTerminalSize(width: width, height: height)
+    }
+}
+
+// MARK: - Combine import
+
+import Combine
 
 // MARK: - Preview
 
