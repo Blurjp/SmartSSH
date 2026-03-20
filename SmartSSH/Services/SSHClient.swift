@@ -167,7 +167,7 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
             print("[SSHClient] TCP connected, authenticating...")
             self.appendOutput("Authenticating as \(username)...\n")
 
-            let authorized: Bool
+            var authorized: Bool
             if host.useKeyAuth, let publicKey, let privateKey {
                 print("[SSHClient] Attempting key authentication with key: \(keyName ?? "none")")
                 authorized = session.authenticateBy(inMemoryPublicKey: publicKey, privateKey: privateKey, andPassword: nil)
@@ -177,7 +177,18 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
                 print("[SSHClient] Key '\(keyName ?? "none")' not found (available: \(allKeys.map { $0.name })). Falling back to password auth.")
                 self.appendOutput("⚠️ SSH key '\(keyName ?? "selected key")' not found. Trying password...\n")
                 if let password, !password.isEmpty {
-                    authorized = session.authenticate(byPassword: password)
+                    // Try keyboard-interactive first (many servers require this for password auth)
+                    authorized = session.authenticateByKeyboardInteractive { request in
+                        // Server is asking for password via keyboard-interactive
+                        print("[SSHClient] Keyboard-interactive request: \(request)")
+                        return password
+                    }
+
+                    // Fall back to regular password auth if keyboard-interactive fails
+                    if !authorized {
+                        print("[SSHClient] Keyboard-interactive failed, trying regular password auth")
+                        authorized = session.authenticate(byPassword: password)
+                    }
                 } else {
                     session.disconnect()
                     let message = "SSH key '\(keyName ?? "selected key")' is missing and no password is configured. Re-add the key in the Keys tab or edit the host to use password auth."
@@ -191,7 +202,18 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
                 }
             } else if let password, !password.isEmpty {
                 print("[SSHClient] Attempting password authentication")
-                authorized = session.authenticate(byPassword: password)
+                // Try keyboard-interactive first (many servers require this for password auth)
+                authorized = session.authenticateByKeyboardInteractive { request in
+                    // Server is asking for password via keyboard-interactive
+                    print("[SSHClient] Keyboard-interactive request: \(request)")
+                    return password
+                }
+
+                // Fall back to regular password auth if keyboard-interactive fails
+                if !authorized {
+                    print("[SSHClient] Keyboard-interactive failed, trying regular password auth")
+                    authorized = session.authenticate(byPassword: password)
+                }
             } else {
                 session.disconnect()
                 let message = "No authentication method configured. Add a password or SSH key to this host."
@@ -284,11 +306,31 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
     }
     
     // MARK: - Output Handling
-    
+
+    // Performance optimization: Batch small updates
+    private var outputUpdateTimer: DispatchWorkItem?
+    private var pendingOutput: String = ""
+
     func appendOutput(_ text: String) {
-        DispatchQueue.main.async {
-            self.output.append(text)
+        // Batch updates to reduce main thread dispatches
+        pendingOutput.append(text)
+
+        // Cancel any pending timer
+        outputUpdateTimer?.cancel()
+
+        // Create new timer for batched update
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                self.output.append(self.pendingOutput)
+                self.pendingOutput = ""
+            }
         }
+
+        outputUpdateTimer = workItem
+
+        // Dispatch after a short delay (accumulates rapid updates)
+        DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.05, execute: workItem)
     }
     
     func clearOutput() {

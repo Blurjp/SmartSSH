@@ -18,7 +18,10 @@ struct TerminalView: View {
     @State private var historyIndex = -1
     @AppStorage("terminalFontSize") private var fontSize = 14.0
     @FocusState private var isInputFocused: Bool
-    
+
+    // Performance optimization: Limit terminal output size
+    @State private var displayedOutput: String = ""
+    private let maxOutputLines = 1000
     private let maxHistorySize = 100
     
     var body: some View {
@@ -87,12 +90,12 @@ struct TerminalView: View {
     private var terminalOutput: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
+                LazyVStack(alignment: .leading, spacing: 2) {
                     // Welcome message
-                    if sshClient.output.isEmpty {
+                    if displayedOutput.isEmpty {
                         welcomeMessage
                     } else {
-                        Text(sshClient.output)
+                        Text(displayedOutput)
                             .font(.system(size: fontSize, design: .monospaced))
                             .foregroundStyle(.green)
                             .textSelection(.enabled)
@@ -106,11 +109,29 @@ struct TerminalView: View {
                 .padding()
             }
             .background(Color.black)
-            .onChange(of: sshClient.output) { _, _ in
-                withAnimation {
-                    proxy.scrollTo("bottom", anchor: .bottom)
+            .onChange(of: sshClient.output) { oldValue, newValue in
+                // Optimize: Only update if content actually changed
+                if oldValue != newValue {
+                    updateDisplayedOutput()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    }
                 }
             }
+        }
+        .onAppear {
+            updateDisplayedOutput()
+        }
+    }
+
+    // Limit output size for performance
+    private func updateDisplayedOutput() {
+        let lines = sshClient.output.components(separatedBy: .newlines)
+        if lines.count > maxOutputLines {
+            let truncated = lines.suffix(maxOutputLines).joined(separator: "\n")
+            displayedOutput = truncated
+        } else {
+            displayedOutput = sshClient.output
         }
     }
     

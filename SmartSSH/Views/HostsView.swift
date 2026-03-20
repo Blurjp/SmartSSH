@@ -23,27 +23,37 @@ struct HostsView: View {
     @State private var fetchErrorMessage: String?
     @State private var alertMessage = ""
     @State private var showingAlert = false
-    
+
     // Credential prompt state
     @State private var pendingHost: Host?
     @State private var showingCredentialPrompt = false
     @State private var promptUsername = ""
     @State private var promptPassword = ""
     @State private var promptPasswordVisible = false
-    
+
+    // Performance optimization: Cache filtered results
+    @State private var cachedFilteredHosts: [Host] = []
+    @State private var cachedGroupedHosts: [String: [Host]] = [:]
+
     var filteredHosts: [Host] {
+        cachedFilteredHosts
+    }
+
+    var groupedHosts: [String: [Host]] {
+        cachedGroupedHosts
+    }
+
+    // Update caches when hosts or search changes
+    private func updateCaches() {
         if searchText.isEmpty {
-            return Array(hosts)
+            cachedFilteredHosts = Array(hosts)
         } else {
-            return hosts.filter { 
+            cachedFilteredHosts = hosts.filter {
                 $0.wrappedName.localizedCaseInsensitiveContains(searchText) ||
                 $0.wrappedHostname.localizedCaseInsensitiveContains(searchText)
             }
         }
-    }
-    
-    var groupedHosts: [String: [Host]] {
-        Dictionary(grouping: filteredHosts) { $0.group ?? "Uncategorized" }
+        cachedGroupedHosts = Dictionary(grouping: cachedFilteredHosts) { $0.group ?? "Uncategorized" }
     }
     
     var body: some View {
@@ -56,6 +66,7 @@ struct HostsView: View {
                         Section(header: sectionHeader(group)) {
                             ForEach(groupedHosts[group] ?? [], id: \.id) { host in
                                 HostRowView(host: host)
+                                    .equatable()
                                     .contentShape(Rectangle())
                                     .onTapGesture {
                                         connect(to: host)
@@ -86,7 +97,16 @@ struct HostsView: View {
             .task {
                 loadHosts()
             }
-            .sheet(isPresented: $showingAddHost, onDismiss: loadHosts) {
+            .onChange(of: hosts) { _, _ in
+                updateCaches()
+            }
+            .onChange(of: searchText) { _, _ in
+                updateCaches()
+            }
+            .sheet(isPresented: $showingAddHost, onDismiss: {
+                loadHosts()
+                updateCaches()
+            }) {
                 AddHostView()
             }
             .sheet(item: $selectedHost, onDismiss: loadHosts) { host in
@@ -308,6 +328,8 @@ struct HostsView: View {
         do {
             hosts = try viewContext.fetch(request)
             fetchErrorMessage = nil
+            // Update caches after loading
+            updateCaches()
         } catch {
             hosts = []
             fetchErrorMessage = error.localizedDescription
@@ -363,6 +385,9 @@ struct HostsView: View {
                 switch result {
                 case .success:
                     host.status = "connected"
+                    // Navigate to Terminal tab after successful connection
+                    NotificationCenter.default.post(name: .smartSSHSelectTab, object: 1)
+                    // Show a brief success message
                     self.connectionMessage = "Connected to \(hostName)"
                     self.showingConnectionAlert = true
                 case .failure(let error):
@@ -400,9 +425,15 @@ struct HostsView: View {
 
 // MARK: - Host Row View
 
-struct HostRowView: View {
+struct HostRowView: View, Equatable {
     let host: Host
     @ObservedObject var sshClient = SSHClient.shared
+
+    static func == (lhs: HostRowView, rhs: HostRowView) -> Bool {
+        lhs.host.id == rhs.host.id &&
+        lhs.host.status == rhs.host.status &&
+        lhs.host.wrappedName == rhs.host.wrappedName
+    }
     
     var body: some View {
         HStack(spacing: 12) {
