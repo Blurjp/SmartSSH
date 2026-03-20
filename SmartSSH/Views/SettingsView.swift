@@ -246,6 +246,7 @@ struct SettingsView: View {
         let request = Host.fetchRequest()
         let hosts = try viewContext.fetch(request).map { host in
             ExportHost(
+                id: host.id ?? UUID(),
                 name: host.wrappedName,
                 hostname: host.wrappedHostname,
                 port: host.port,
@@ -253,7 +254,9 @@ struct SettingsView: View {
                 keyFingerprint: host.keyFingerprint,
                 group: host.group,
                 tags: host.tags,
-                useKeyAuth: host.useKeyAuth
+                useKeyAuth: host.useKeyAuth,
+                portForwards: host.portForwards,
+                routingOptions: host.routingOptions
             )
         }
 
@@ -265,8 +268,9 @@ struct SettingsView: View {
         try clearPersistedData()
 
         for host in payload.hosts {
-            _ = Host.create(
+            let importedHost = Host.create(
                 in: viewContext,
+                id: host.id,
                 name: host.name,
                 hostname: host.hostname,
                 port: host.port,
@@ -276,6 +280,8 @@ struct SettingsView: View {
                 tags: host.tags,
                 useKeyAuth: host.useKeyAuth
             )
+            importedHost.portForwards = host.portForwards
+            importedHost.routingOptions = host.routingOptions
         }
 
         try viewContext.save()
@@ -321,6 +327,7 @@ private struct SettingsExportPayload: Codable {
 }
 
 private struct ExportHost: Codable {
+    let id: UUID
     let name: String
     let hostname: String
     let port: Int16
@@ -329,6 +336,8 @@ private struct ExportHost: Codable {
     let group: String?
     let tags: [String]?
     let useKeyAuth: Bool
+    let portForwards: [Host.PortForward]
+    let routingOptions: Host.RoutingOptions?
 }
 
 // MARK: - Feature Row

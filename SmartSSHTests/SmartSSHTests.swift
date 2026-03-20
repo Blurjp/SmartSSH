@@ -55,6 +55,27 @@ final class SmartSSHTests: XCTestCase {
         let test = TerminalSizingTests()
         test.testTerminalGridSizeScalesWithViewport()
     }
+
+    func testPortForwardValidationAndSerialization() throws {
+        let test = HostConnectionConfigurationTests()
+        test.testPortForwardValidation()
+        test.testPortForwardRejectsInvalidPorts()
+        test.testHostPortForwardRoundTrip()
+        test.testHostRoutingOptionsRoundTrip()
+    }
+
+    func testKeepAliveIntervalSanitization() throws {
+        let test = SSHReliabilityTests()
+        test.testSanitizedKeepAliveIntervalUsesMinimum()
+        test.testSanitizedKeepAliveIntervalRespectsConfiguredValue()
+    }
+
+    func testPortForwardRuntimeBookkeeping() throws {
+        let test = PortForwardRuntimeTests()
+        test.testPortForwardStatusSummaryUsesSortedPorts()
+        test.testEnabledPortForwardFiltering()
+        test.testLoopbackForwardResolvesToHostWhenJumpHostPresent()
+    }
     
     func testPortValidation() throws {
         let test = PortValidationTests()
@@ -378,6 +399,158 @@ final class TerminalSizingTests: XCTestCase {
 
         XCTAssertEqual(result.width, 100)
         XCTAssertEqual(result.height, 31)
+    }
+}
+
+final class HostConnectionConfigurationTests: XCTestCase {
+
+    func testPortForwardValidation() {
+        let forward = Host.PortForward(
+            name: "Postgres",
+            localPort: 15432,
+            remoteHost: "127.0.0.1",
+            remotePort: 5432,
+            isEnabled: true
+        )
+
+        XCTAssertTrue(forward.isValid)
+        XCTAssertEqual(forward.summary, "15432 -> 127.0.0.1:5432")
+    }
+
+    func testPortForwardRejectsInvalidPorts() {
+        let invalidLocal = Host.PortForward(
+            name: "Bad Local",
+            localPort: 0,
+            remoteHost: "db.internal",
+            remotePort: 5432,
+            isEnabled: true
+        )
+        let invalidRemote = Host.PortForward(
+            name: "Bad Remote",
+            localPort: 15432,
+            remoteHost: "db.internal",
+            remotePort: 70000,
+            isEnabled: true
+        )
+
+        XCTAssertFalse(invalidLocal.isValid)
+        XCTAssertFalse(invalidRemote.isValid)
+    }
+
+    func testHostPortForwardRoundTrip() {
+        let controller = DataController(inMemory: true, cloudSyncEnabled: false)
+        let host = Host.create(
+            in: controller.container.viewContext,
+            name: "App",
+            hostname: "app.internal",
+            username: "deploy"
+        )
+        let forwards = [
+            Host.PortForward(
+                name: "Postgres",
+                localPort: 15432,
+                remoteHost: "127.0.0.1",
+                remotePort: 5432,
+                isEnabled: true
+            ),
+            Host.PortForward(
+                name: "Redis",
+                localPort: 16379,
+                remoteHost: "127.0.0.1",
+                remotePort: 6379,
+                isEnabled: false
+            )
+        ]
+
+        host.portForwards = forwards
+
+        XCTAssertEqual(host.portForwards, forwards)
+        XCTAssertFalse((host.portForwardsData ?? "").isEmpty)
+    }
+
+    func testHostRoutingOptionsRoundTrip() {
+        let controller = DataController(inMemory: true, cloudSyncEnabled: false)
+        let bastion = Host.create(
+            in: controller.container.viewContext,
+            name: "Bastion",
+            hostname: "bastion.internal",
+            username: "ops"
+        )
+        let host = Host.create(
+            in: controller.container.viewContext,
+            name: "App",
+            hostname: "app.internal",
+            username: "deploy"
+        )
+        let options = Host.RoutingOptions(
+            jumpHostID: bastion.id,
+            proxy: .init(type: .socks5, host: "proxy.internal", port: 1080)
+        )
+
+        host.routingOptions = options
+
+        XCTAssertEqual(host.routingOptions, options)
+        XCTAssertEqual(host.routingOptions?.proxy?.displayName, "SOCKS5")
+    }
+}
+
+final class SSHReliabilityTests: XCTestCase {
+
+    func testSanitizedKeepAliveIntervalUsesMinimum() {
+        XCTAssertEqual(SSHClient.sanitizedKeepAliveInterval(0), 10)
+        XCTAssertEqual(SSHClient.sanitizedKeepAliveInterval(-5), 10)
+    }
+
+    func testSanitizedKeepAliveIntervalRespectsConfiguredValue() {
+        XCTAssertEqual(SSHClient.sanitizedKeepAliveInterval(45), 45)
+    }
+}
+
+final class PortForwardRuntimeTests: XCTestCase {
+
+    func testPortForwardStatusSummaryUsesSortedPorts() {
+        let forwards = [
+            Host.PortForward(name: "API", localPort: 18080, remoteHost: "127.0.0.1", remotePort: 8080, isEnabled: true),
+            Host.PortForward(name: "DB", localPort: 15432, remoteHost: "127.0.0.1", remotePort: 5432, isEnabled: true)
+        ]
+
+        XCTAssertEqual(SSHClient.portForwardStatusSummary(for: forwards), "15432, 18080")
+    }
+
+    func testEnabledPortForwardFiltering() {
+        let forwards = [
+            Host.PortForward(name: "API", localPort: 18080, remoteHost: "127.0.0.1", remotePort: 8080, isEnabled: true),
+            Host.PortForward(name: "Redis", localPort: 16379, remoteHost: "127.0.0.1", remotePort: 6379, isEnabled: false)
+        ]
+
+        let enabled = SSHClient.enabledPortForwards(from: forwards)
+
+        XCTAssertEqual(enabled.map(\.localPort), [18080])
+    }
+
+    func testLoopbackForwardResolvesToHostWhenJumpHostPresent() {
+        let controller = DataController(inMemory: true, cloudSyncEnabled: false)
+        let jumpHost = Host.create(
+            in: controller.container.viewContext,
+            name: "Bastion",
+            hostname: "bastion.internal",
+            username: "ops"
+        )
+        let host = Host.create(
+            in: controller.container.viewContext,
+            name: "App",
+            hostname: "app.internal",
+            username: "deploy"
+        )
+        host.routingOptions = .init(jumpHostID: jumpHost.id, proxy: nil)
+
+        let destination = SSHClient.resolvedForwardDestination(
+            for: host,
+            forward: .init(name: "App HTTP", localPort: 18080, remoteHost: "127.0.0.1", remotePort: 8080, isEnabled: true)
+        )
+
+        XCTAssertEqual(destination.host, "app.internal")
+        XCTAssertEqual(destination.port, 8080)
     }
 }
 

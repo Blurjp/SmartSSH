@@ -10,6 +10,8 @@
         <attribute name="lastConnectedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="port" optional="YES" attributeType="Integer 16" defaultValueString="22" usesScalarValueType="YES"/>
+        <attribute name="portForwardsData" optional="YES" attributeType="String"/>
+        <attribute name="routingOptionsData" optional="YES" attributeType="String"/>
         <attribute name="snippets" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromData" customClassName="[String]"/>
         <attribute name="status" optional="YES" attributeType="String"/>
         <attribute name="tags" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromData" customClassName="[String]"/>

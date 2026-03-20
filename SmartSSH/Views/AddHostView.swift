@@ -21,6 +21,17 @@ struct AddHostView: View {
     @State private var useKeyAuth = false
     @State private var selectedKey = ""
     @State private var passwordVisible = false
+    @State private var savedPortForwards: [Host.PortForward] = []
+    @State private var draftForwardName = ""
+    @State private var draftLocalPort = ""
+    @State private var draftRemoteHost = "127.0.0.1"
+    @State private var draftRemotePort = ""
+    @State private var availableHosts: [Host] = []
+    @State private var selectedJumpHostID: UUID?
+    @State private var proxyEnabled = false
+    @State private var selectedProxyType: Host.ProxyType = .socks5
+    @State private var proxyHost = ""
+    @State private var proxyPort = ""
     
     @State private var isTesting = false
     @State private var showingError = false
@@ -50,6 +61,46 @@ struct AddHostView: View {
         guard let portInt = Int(port), portInt >= 1, portInt <= Int16.max else { return nil }
         return Int16(portInt)
     }
+
+    private var validDraftForward: Host.PortForward? {
+        guard let localPort = Int(draftLocalPort),
+              let remotePort = Int(draftRemotePort) else {
+            return nil
+        }
+
+        let forward = Host.PortForward(
+            name: draftForwardName.isEmpty ? "Forward \(localPort)" : draftForwardName,
+            localPort: localPort,
+            remoteHost: draftRemoteHost,
+            remotePort: remotePort,
+            isEnabled: true
+        )
+        return forward.isValid ? forward : nil
+    }
+
+    private var routingOptions: Host.RoutingOptions? {
+        let proxy: Host.ProxyConfiguration?
+        if proxyEnabled,
+           let proxyPortInt = Int(proxyPort) {
+            let candidate = Host.ProxyConfiguration(
+                type: selectedProxyType,
+                host: proxyHost.trimmingCharacters(in: .whitespacesAndNewlines),
+                port: proxyPortInt
+            )
+            proxy = candidate.isValid ? candidate : nil
+        } else {
+            proxy = nil
+        }
+
+        let options = Host.RoutingOptions(jumpHostID: selectedJumpHostID, proxy: proxy)
+        return options.hasRouting ? options : nil
+    }
+
+    private var jumpHostChoices: [Host] {
+        availableHosts
+            .filter { $0.id != hostToEdit?.id }
+            .sorted { $0.wrappedName.localizedCaseInsensitiveCompare($1.wrappedName) == .orderedAscending }
+    }
     
     var body: some View {
         NavigationStack {
@@ -57,6 +108,7 @@ struct AddHostView: View {
                 basicInfoSection
                 authenticationSection
                 organizationSection
+                routingSection
                 testConnectionSection
             }
             .formStyle(.grouped)
@@ -89,6 +141,7 @@ struct AddHostView: View {
             }
             .onAppear {
                 loadKeys()
+                loadHosts()
                 populateFormIfNeeded()
             }
         }
@@ -239,6 +292,78 @@ struct AddHostView: View {
             Text("Organization")
         }
     }
+
+    private var routingSection: some View {
+        Section {
+            if !savedPortForwards.isEmpty {
+                ForEach(savedPortForwards) { forward in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(forward.name)
+                                .fontWeight(.medium)
+                            Text(forward.summary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button(role: .destructive) {
+                            removePortForward(forward)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            TextField("Forward name", text: $draftForwardName)
+            TextField("Local port", text: $draftLocalPort)
+                .keyboardType(.numberPad)
+            TextField("Remote host", text: $draftRemoteHost)
+                .autocapitalization(.none)
+                .autocorrectionDisabled()
+            TextField("Remote port", text: $draftRemotePort)
+                .keyboardType(.numberPad)
+
+            Button {
+                addDraftPortForward()
+            } label: {
+                Label("Add Local Port Forward", systemImage: "plus.circle")
+            }
+            .disabled(validDraftForward == nil)
+
+            Picker("Jump Host", selection: $selectedJumpHostID) {
+                Text("None").tag(nil as UUID?)
+                ForEach(jumpHostChoices, id: \.id) { host in
+                    Text(host.wrappedName).tag(host.id as UUID?)
+                }
+            }
+
+            Toggle("Use Proxy", isOn: $proxyEnabled)
+
+            if proxyEnabled {
+                Picker("Proxy Type", selection: $selectedProxyType) {
+                    ForEach(Host.ProxyType.allCases) { type in
+                        Text(type.displayName).tag(type)
+                    }
+                }
+
+                TextField("Proxy host", text: $proxyHost)
+                    .autocapitalization(.none)
+                    .autocorrectionDisabled()
+
+                TextField("Proxy port", text: $proxyPort)
+                    .keyboardType(.numberPad)
+            }
+        } header: {
+            Text("Routing")
+        } footer: {
+            Text("Save local forwards, a jump host, and proxy details with this host. Tunnel execution is not active yet, but the connection plan is stored and exportable.")
+                .font(.caption)
+        }
+    }
     
     private var testConnectionSection: some View {
         Section {
@@ -286,6 +411,9 @@ struct AddHostView: View {
             showingError = true
             return
         }
+
+        tempHost.portForwards = savedPortForwards
+        tempHost.routingOptions = routingOptions
 
         SSHClient.shared.connect(to: tempHost) { result in
             isTesting = false
@@ -338,6 +466,8 @@ struct AddHostView: View {
         }
 
         host.color = color
+        host.portForwards = savedPortForwards
+        host.routingOptions = routingOptions
         
         do {
             try viewContext.save()
@@ -355,6 +485,25 @@ struct AddHostView: View {
         }
     }
 
+    private func loadHosts() {
+        let request = Host.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \Host.name, ascending: true)]
+        availableHosts = (try? viewContext.fetch(request)) ?? []
+    }
+
+    private func addDraftPortForward() {
+        guard let forward = validDraftForward else { return }
+        savedPortForwards.append(forward)
+        draftForwardName = ""
+        draftLocalPort = ""
+        draftRemoteHost = "127.0.0.1"
+        draftRemotePort = ""
+    }
+
+    private func removePortForward(_ forward: Host.PortForward) {
+        savedPortForwards.removeAll { $0.id == forward.id }
+    }
+
     private func populateFormIfNeeded() {
         guard let hostToEdit, name.isEmpty, hostname.isEmpty, username.isEmpty else { return }
 
@@ -367,6 +516,18 @@ struct AddHostView: View {
         color = hostToEdit.color ?? "blue"
         useKeyAuth = hostToEdit.useKeyAuth
         selectedKey = hostToEdit.keyFingerprint ?? ""
+        savedPortForwards = hostToEdit.portForwards
+        selectedJumpHostID = hostToEdit.routingOptions?.jumpHostID
+        if let proxy = hostToEdit.routingOptions?.proxy {
+            proxyEnabled = true
+            selectedProxyType = proxy.type
+            proxyHost = proxy.host
+            proxyPort = String(proxy.port)
+        } else {
+            proxyEnabled = false
+            proxyHost = ""
+            proxyPort = ""
+        }
     }
 }
 

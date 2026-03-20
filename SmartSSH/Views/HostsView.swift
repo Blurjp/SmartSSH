@@ -458,6 +458,22 @@ struct HostRowView: View, Equatable {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+
+                if !routeBadges.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(routeBadges, id: \.self) { badge in
+                                Text(badge)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(Color(.systemGray5))
+                                    .foregroundStyle(.secondary)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                    }
+                }
             }
             
             Spacer()
@@ -487,6 +503,25 @@ struct HostRowView: View, Equatable {
         case "error": return "exclamationmark.triangle"
         default: return "server.rack"
         }
+    }
+
+    private var routeBadges: [String] {
+        var badges: [String] = []
+
+        let enabledForwards = host.portForwards.filter(\.isEnabled)
+        if !enabledForwards.isEmpty {
+            badges.append(enabledForwards.count == 1 ? "1 tunnel" : "\(enabledForwards.count) tunnels")
+        }
+
+        if host.routingOptions?.jumpHostID != nil {
+            badges.append("jump")
+        }
+
+        if let proxy = host.routingOptions?.proxy {
+            badges.append(proxy.displayName.lowercased())
+        }
+
+        return badges
     }
 }
 

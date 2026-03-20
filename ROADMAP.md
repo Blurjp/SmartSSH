@@ -90,4 +90,6 @@ This roadmap is ordered by product impact and competitive necessity against Term
 ## Current Implementation Focus
 
 In progress:
-- Phase 1.1 real interactive terminal sessions
+- Phase 1.2 port forward persistence and host routing configuration
+- Phase 1.3 jump host and proxy configuration
+- Phase 1.4 session reliability improvements
