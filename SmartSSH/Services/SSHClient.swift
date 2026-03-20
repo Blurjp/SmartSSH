@@ -11,6 +11,7 @@ import Network
 import CryptoKit
 import NMSSH_riden
 import CoreFoundation
+import CoreData
 
 // MARK: - SSH Connection States
 
@@ -71,6 +72,8 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate, NMSSHChannelD
     private var _hostVerificationFailureMessage: String?
     private let outputLock = NSLock()
     private let inactiveSessionErrorFragment = "absence of an active session"
+    /// Serializes command execution to prevent channel allocation conflicts
+    private let commandQueue = DispatchQueue(label: "SmartSSH.commandQueue", qos: .userInitiated)
     private let localNetworkGuidance = "Make sure your iPhone is on the same network and SmartSSH has Local Network access enabled in Settings."
     private var keepAliveTimer: DispatchSourceTimer?
     private let portForwardLock = NSLock()
@@ -187,20 +190,36 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate, NMSSHChannelD
 
             print("[SSHClient] TCP preflight OK, creating NMSSHSession...")
             let session = NMSSHSession(host: hostname, port: Int(host.port), andUsername: username)
-            session.timeout = NSNumber(value: timeout)
+
+            // NMSSH timeout is in seconds, set to minimum of 30s and configured timeout
+            let sshTimeout = max(timeout, 30.0)
+            session.timeout = NSNumber(value: sshTimeout)
             session.delegate = self
             if let sha1Hash = NMSSHSessionHash(rawValue: 1) {
                 session.fingerprintHash = sha1Hash
             }
 
-            guard session.connect(), session.isConnected else {
+            // Perform SSH connection with async timeout protection
+            // NMSSH's connect() is synchronous and may block longer than expected
+            let connectResult = Self.connectWithTimeoutProtection(
+                session: session,
+                timeout: sshTimeout
+            )
+
+            guard connectResult.connected, session.isConnected else {
+                let lastError = session.lastError?.localizedDescription ?? "Unknown error"
                 print("[SSHClient] NMSSHSession.connect() failed")
+                print("[SSHClient] NMSSH lastError: \(lastError)")
+                print("[SSHClient] Timeout protection triggered: \(connectResult.timedOut)")
+
                 let message = self.connectionFailureMessage(
                     for: session,
                     hostname: hostname,
-                    port: Int(host.port)
+                    port: Int(host.port),
+                    timedOut: connectResult.timedOut
                 )
                 print("[SSHClient] Connection failed: \(message)")
+                print("[SSHClient] Full error details: \(lastError)")
                 DispatchQueue.main.async {
                     self.state = .error(message)
                     self.isConnected = false
@@ -350,7 +369,7 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate, NMSSHChannelD
     }
     
     // MARK: - Command Execution
-    
+
     func execute(
         command: String,
         completion: @escaping (Result<String, SSHError>) -> Void
@@ -360,7 +379,8 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate, NMSSHChannelD
             return
         }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        // Use serial queue to prevent concurrent channel allocation
+        commandQueue.async { [weak self] in
             guard let self else { return }
             if self.isShellActive {
                 var error: NSError?
@@ -519,9 +539,13 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate, NMSSHChannelD
         }
     }
 
-    private func connectionFailureMessage(for session: NMSSHSession, hostname: String, port: Int) -> String {
+    private func connectionFailureMessage(for session: NMSSHSession, hostname: String, port: Int, timedOut: Bool = false) -> String {
         if let verificationMessage = sessionLock.withLock({ _hostVerificationFailureMessage }) {
             return verificationMessage
+        }
+
+        if timedOut {
+            return "SSH connection to \(hostname):\(port) timed out during handshake. This can happen if the server is slow, uses incompatible encryption, or if there's a firewall issue. Try increasing the connection timeout in Settings."
         }
 
         if let rawMessage = session.lastError?.localizedDescription,
@@ -534,6 +558,59 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate, NMSSHChannelD
         }
 
         return "Unable to connect to \(hostname):\(port). Check the host, port, and network reachability."
+    }
+
+    // MARK: - Connection Timeout Protection
+
+    private struct ConnectResult {
+        let connected: Bool
+        let timedOut: Bool
+    }
+
+    private static func connectWithTimeoutProtection(session: NMSSHSession, timeout: TimeInterval) -> ConnectResult {
+        var connected = false
+        var timedOut = false
+        let semaphore = DispatchSemaphore(value: 0)
+        let resultLock = NSLock()  // Protects `connected`
+        var threadCompleted = false
+
+        // Use a high-priority thread for the connection attempt
+        Thread.detachNewThread {
+            defer {
+                // Signal completion regardless of outcome
+                semaphore.signal()
+            }
+            let result = session.connect()
+            resultLock.lock()
+            connected = result
+            threadCompleted = true
+            resultLock.unlock()
+        }
+
+        // Wait for connection with timeout (add 5s buffer for overhead)
+        let bufferTimeout: TimeInterval = 5.0
+        let totalTimeout = timeout + bufferTimeout
+        let waitResult = semaphore.wait(timeout: .now() + totalTimeout)
+
+        resultLock.lock()
+        let completed = threadCompleted
+        resultLock.unlock()
+
+        if waitResult == .timedOut && !completed {
+            timedOut = true
+            print("[SSHClient] SSH connection timed out after \(totalTimeout)s")
+
+            // Note: The detached thread is still running session.connect()
+            // We can't safely interrupt it, so we let it complete in background.
+            // The session object will be cleaned up when the caller discards it.
+            // Return timeout error to caller immediately.
+        }
+
+        resultLock.lock()
+        let finalConnected = connected
+        resultLock.unlock()
+
+        return ConnectResult(connected: finalConnected && !timedOut, timedOut: timedOut)
     }
 
     private func tcpPreflightErrorMessage(hostname: String, port: Int, timeout: TimeInterval) -> String? {
@@ -1211,17 +1288,36 @@ private final class LibSSH2TunnelSession {
             }
         } else if let password = endpoint.password, !password.isEmpty {
             // Try keyboard-interactive first (for servers that don't support plain password auth)
+            // Store password in a thread-local context for the C callback
+            let passwordPtr = Unmanaged.passRetained(password as NSString) // Keep alive during call
+            var abstractPtr: UnsafeMutableRawPointer? = passwordPtr.toOpaque()
+
             var result = libssh2_userauth_keyboard_interactive_ex(
                 session,
                 endpoint.username,
                 UInt32(endpoint.username.utf8.count),
-                { response in
-                    // Keyboard-interactive callback - provide password
-                    guard let response = response else { return -1 }
-                    response.pointee.newResponse(response, password, UInt32(password.utf8.count))
-                    return 0
+                { (_, _, _, _, numPrompts: Int32, prompts, responses, abstract) in
+                    // Keyboard-interactive callback - provide password for each prompt
+                    guard let responses = responses, let prompts = prompts, numPrompts > 0,
+                          let abstract = abstract else { return }
+                    // Retrieve password from abstract pointer
+                    let passwordStr = Unmanaged<NSString>.fromOpaque(abstract).takeUnretainedValue() as String
+
+                    // Use withCString to get a proper C string pointer
+                    passwordStr.withCString { passwordPtr in
+                        for i in 0..<Int(numPrompts) {
+                            // responses is a pointer to an array of LIBSSH2_USERAUTH_KBDINT_RESPONSE
+                            // Access each element via pointer arithmetic
+                            responses.advanced(by: i).pointee.text = strdup(passwordPtr)
+                            responses.advanced(by: i).pointee.length = UInt32(passwordStr.utf8.count)
+                        }
+                    }
                 }
             )
+
+            // Clean up the password reference
+            _ = passwordPtr
+            abstractPtr = nil
 
             // Fall back to password auth if keyboard-interactive fails
             if result != 0 {
@@ -1336,7 +1432,7 @@ private enum TunnelSocket {
         }
 
         // Wait for connection with timeout using poll
-        var pollFD = pollfd(fd: socketFD, events: POLLOUT, revents: 0)
+        var pollFD = pollfd(fd: socketFD, events: Int16(POLLOUT), revents: 0)
         let pollResult = poll(&pollFD, 1, Int32(timeout * 1000))
 
         if pollResult < 0 {
@@ -1377,8 +1473,11 @@ private enum TunnelSocket {
 
         try writeAll(socketFD: socketFD, data: Data(request.utf8))
         let response = try readUntil(socketFD: socketFD, terminator: Data("\r\n\r\n".utf8), maxLength: 4096)
-        guard let text = String(data: response, encoding: .utf8),
-              text.contains(" 200 ") else {
+        guard let text = String(data: response, encoding: .utf8) else {
+            throw SSHError.connectionFailed("HTTP CONNECT failed: Invalid response from proxy.")
+        }
+
+        guard text.contains(" 200 ") else {
             if text.contains(" 407 ") {
                 throw SSHError.connectionFailed("HTTP CONNECT failed: Proxy authentication required. Check username and password.")
             }
