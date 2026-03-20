@@ -1032,16 +1032,18 @@ private struct TunnelRoute {
     }
 
     private static func lookupHost(by id: UUID) throws -> Host? {
-        let context = DataController.shared.container.viewContext
         var result: Host?
         var fetchError: Error?
 
-        context.performAndWait {
+        // Use a private context for background thread safety
+        let privateContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
+        privateContext.parent = DataController.shared.container.viewContext
+        privateContext.performAndWait {
             do {
                 let request = Host.fetchRequest()
                 request.fetchLimit = 1
                 request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
-                result = try context.fetch(request).first
+                result = try privateContext.fetch(request).first
             } catch {
                 fetchError = error
             }
@@ -1158,17 +1160,34 @@ private final class LibSSH2TunnelSession {
                 throw SSHError.authenticationFailed("SSH key authentication failed for forwarded connection.")
             }
         } else if let password = endpoint.password, !password.isEmpty {
-            let result = libssh2_userauth_password_ex(
+            // Try keyboard-interactive first (for servers that don't support plain password auth)
+            var result = libssh2_userauth_keyboard_interactive_ex(
                 session,
                 endpoint.username,
                 UInt32(endpoint.username.utf8.count),
-                password,
-                UInt32(password.utf8.count),
-                nil
+                { response in
+                    // Keyboard-interactive callback - provide password
+                    guard let response = response else { return -1 }
+                    response.pointee.newResponse(response, password, UInt32(password.utf8.count))
+                    return 0
+                }
             )
+
+            // Fall back to password auth if keyboard-interactive fails
+            if result != 0 {
+                result = libssh2_userauth_password_ex(
+                    session,
+                    endpoint.username,
+                    UInt32(endpoint.username.utf8.count),
+                    password,
+                    UInt32(password.utf8.count),
+                    nil
+                )
+            }
+
             guard result == 0 else {
                 libssh2_session_free(session)
-                throw SSHError.authenticationFailed("Password authentication failed for forwarded connection.")
+                throw SSHError.authenticationFailed("Authentication failed for forwarded connection.")
             }
         } else {
             libssh2_session_free(session)
@@ -1180,9 +1199,11 @@ private final class LibSSH2TunnelSession {
 }
 
 private enum TunnelSocket {
+    private static let defaultConnectTimeout: TimeInterval = 30.0
+
     static func open(to host: String, port: Int, proxy: Host.ProxyConfiguration?) throws -> Int32 {
         if let proxy {
-            let socketFD = try connectSocket(host: proxy.host, port: proxy.port)
+            let socketFD = try connectSocket(host: proxy.host, port: proxy.port, timeout: defaultConnectTimeout)
             do {
                 switch proxy.type {
                 case .http:
@@ -1197,10 +1218,10 @@ private enum TunnelSocket {
             }
         }
 
-        return try connectSocket(host: host, port: port)
+        return try connectSocket(host: host, port: port, timeout: defaultConnectTimeout)
     }
 
-    private static func connectSocket(host: String, port: Int) throws -> Int32 {
+    private static func connectSocket(host: String, port: Int, timeout: TimeInterval = 30.0) throws -> Int32 {
         var hints = addrinfo(
             ai_flags: AI_ADDRCONFIG,
             ai_family: AF_UNSPEC,
@@ -1216,24 +1237,77 @@ private enum TunnelSocket {
         let service = String(port)
         let status = getaddrinfo(host, service, &hints, &result)
         guard status == 0, let result else {
-            throw SSHError.connectionFailed("Unable to resolve \(host):\(port).")
+            throw SSHError.connectionFailed("Unable to resolve \(host):\(port). Check the hostname and DNS configuration.")
         }
         defer { freeaddrinfo(result) }
 
         var pointer: UnsafeMutablePointer<addrinfo>? = result
+        var lastError: Error?
+
         while let info = pointer {
             let socketFD = socket(info.pointee.ai_family, info.pointee.ai_socktype, info.pointee.ai_protocol)
-            if socketFD >= 0 {
-                let connectResult = Darwin.connect(socketFD, info.pointee.ai_addr, info.pointee.ai_addrlen)
-                if connectResult == 0 {
-                    return socketFD
-                }
+            guard socketFD >= 0 else {
+                pointer = info.pointee.ai_next
+                continue
+            }
+
+            do {
+                try connectWithTimeout(socketFD: socketFD, addr: info.pointee.ai_addr, addrlen: info.pointee.ai_addrlen, timeout: timeout)
+                return socketFD
+            } catch {
+                lastError = error
                 Darwin.close(socketFD)
             }
+
             pointer = info.pointee.ai_next
         }
 
-        throw SSHError.connectionFailed("Could not connect to \(host):\(port).")
+        throw lastError ?? SSHError.connectionFailed("Could not connect to \(host):\(port). Check the hostname, port, and network connectivity.")
+    }
+
+    private static func connectWithTimeout(socketFD: Int32, addr: UnsafePointer<sockaddr>, addrlen: socklen_t, timeout: TimeInterval) throws {
+        // Set socket to non-blocking
+        var flags = fcntl(socketFD, F_GETFL, 0)
+        guard flags >= 0 else {
+            throw SSHError.connectionFailed("Failed to get socket flags.")
+        }
+        fcntl(socketFD, F_SETFL, flags | O_NONBLOCK)
+
+        // Attempt connect
+        let connectResult = Darwin.connect(socketFD, addr, addrlen)
+
+        if connectResult == 0 {
+            // Connected immediately (rare but possible)
+            fcntl(socketFD, F_SETFL, flags)  // Restore blocking mode
+            return
+        } else if errno != EINPROGRESS {
+            // Connection failed immediately
+            throw SSHError.connectionFailed("Connection failed: \(String(cString: strerror(errno)))")
+        }
+
+        // Wait for connection with timeout using poll
+        var pollFD = pollfd(fd: socketFD, events: POLLOUT, revents: 0)
+        let pollResult = poll(&pollFD, 1, Int32(timeout * 1000))
+
+        if pollResult < 0 {
+            throw SSHError.connectionFailed("Poll failed: \(String(cString: strerror(errno)))")
+        } else if pollResult == 0 {
+            throw SSHError.connectionFailed("Connection timed out after \(timeout)s. Check firewall and network connectivity.")
+        }
+
+        // Check if connection succeeded
+        var error = Int32.zero
+        var len = socklen_t(MemoryLayout<Int32>.size)
+        guard getsockopt(socketFD, SOL_SOCKET, SO_ERROR, &error, &len) == 0 else {
+            throw SSHError.connectionFailed("Failed to get socket error.")
+        }
+
+        if error != 0 {
+            throw SSHError.connectionFailed("Connection failed: \(String(cString: strerror(errno)))")
+        }
+
+        // Restore blocking mode
+        fcntl(socketFD, F_SETFL, flags)
     }
 
     private static func performHTTPConnect(socketFD: Int32, targetHost: String, targetPort: Int) throws {
@@ -1242,7 +1316,7 @@ private enum TunnelSocket {
         let response = try readUntil(socketFD: socketFD, terminator: Data("\r\n\r\n".utf8), maxLength: 4096)
         guard let text = String(data: response, encoding: .utf8),
               text.contains(" 200 ") else {
-            throw SSHError.connectionFailed("HTTP proxy CONNECT failed.")
+            throw SSHError.connectionFailed("HTTP CONNECT failed. Proxy may not support CONNECT method or denies access to \(targetHost):\(targetPort).")
         }
     }
 
@@ -1250,7 +1324,7 @@ private enum TunnelSocket {
         try writeAll(socketFD: socketFD, data: Data([0x05, 0x01, 0x00]))
         let methodReply = try readExact(socketFD: socketFD, count: 2)
         guard methodReply.count == 2, methodReply[1] == 0x00 else {
-            throw SSHError.connectionFailed("SOCKS5 proxy requires unsupported authentication.")
+            throw SSHError.connectionFailed("SOCKS5 proxy requires authentication. Only anonymous (no-auth) is currently supported.")
         }
 
         var request = Data([0x05, 0x01, 0x00])
@@ -1270,7 +1344,7 @@ private enum TunnelSocket {
 
         let header = try readExact(socketFD: socketFD, count: 4)
         guard header.count == 4, header[1] == 0x00 else {
-            throw SSHError.connectionFailed("SOCKS5 CONNECT failed.")
+            throw SSHError.connectionFailed("SOCKS5 CONNECT to \(targetHost):\(targetPort) failed. Check proxy configuration and destination accessibility.")
         }
 
         let atyp = header[3]
@@ -1283,7 +1357,7 @@ private enum TunnelSocket {
         case 0x04:
             _ = try readExact(socketFD: socketFD, count: 16 + 2)
         default:
-            throw SSHError.connectionFailed("SOCKS5 proxy returned an unknown address type.")
+            throw SSHError.connectionFailed("SOCKS5 proxy returned an unknown address type (0x\(String(format: "%02X", atyp))).")
         }
     }
 
