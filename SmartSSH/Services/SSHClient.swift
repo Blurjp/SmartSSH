@@ -41,7 +41,7 @@ enum SSHConnectionState: Equatable {
 
 // MARK: - SSH Client
 
-class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
+class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate, NMSSHChannelDelegate {
     static let shared = SSHClient()
 
     // MARK: - Properties
@@ -49,6 +49,7 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
     @Published var state: SSHConnectionState = .disconnected
     @Published var output: String = ""
     @Published var isConnected: Bool = false
+    @Published var isShellActive: Bool = false
     
     private var connectionTimeout: TimeInterval {
         let saved = UserDefaults.standard.integer(forKey: "connectionTimeout")
@@ -60,6 +61,7 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
     private var _session: NMSSHSession?
     private var _host: Host?
     private var _hostVerificationFailureMessage: String?
+    private let outputLock = NSLock()
     private let inactiveSessionErrorFragment = "absence of an active session"
     private let localNetworkGuidance = "Make sure your iPhone is on the same network and SmartSSH has Local Network access enabled in Settings."
 
@@ -240,11 +242,31 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
 
             print("[SSHClient] Authentication successful!")
             session.channel.requestPty = true
+            session.channel.ptyTerminalType = .xterm
+            session.channel.delegate = self
+
+            do {
+                try session.channel.startShell()
+            } catch {
+                let message = error.localizedDescription
+                print("[SSHClient] Shell startup failed: \(message)")
+                session.disconnect()
+                DispatchQueue.main.async {
+                    self.state = .error(message)
+                    self.isConnected = false
+                    self.isShellActive = false
+                }
+                completion(.failure(.connectionFailed(message)))
+                return
+            }
+
+            _ = session.channel.requestSizeWidth(120, height: 32)
 
             self.sessionLock.withLock { self._session = session }
             DispatchQueue.main.async {
                 self.state = .connected
                 self.isConnected = true
+                self.isShellActive = true
                 self.appendOutput("Connected!\n\n")
                 completion(.success(()))
             }
@@ -266,6 +288,7 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
         DispatchQueue.main.async {
             self.state = .disconnected
             self.isConnected = false
+            self.isShellActive = false
             if hadSession {
                 self.output.append("\nDisconnected.\n")
             }
@@ -283,10 +306,30 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
             return
         }
 
-        appendOutput("$ \(command)\n")
-
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
+            if self.isShellActive {
+                var error: NSError?
+                let success = session.channel.write(command + "\n", error: &error, timeout: NSNumber(value: self.connectionTimeout))
+
+                if let error {
+                    let message = error.localizedDescription
+                    self.appendOutput("\(message)\n")
+                    completion(.failure(.commandFailed(message)))
+                    return
+                }
+
+                guard success else {
+                    let message = "Failed to write to remote shell"
+                    self.appendOutput("\(message)\n")
+                    completion(.failure(.commandFailed(message)))
+                    return
+                }
+
+                completion(.success(command))
+                return
+            }
+
             var error: NSError?
             let response = session.channel.execute(command, error: &error, timeout: NSNumber(value: self.connectionTimeout))
 
@@ -304,6 +347,14 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
             completion(.success(output))
         }
     }
+
+    func requestTerminalSize(width: Int, height: Int) {
+        guard width > 0, height > 0, let session = activeSession, isShellActive else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = session.channel.requestSizeWidth(UInt(width), height: UInt(height))
+        }
+    }
     
     // MARK: - Output Handling
 
@@ -312,18 +363,21 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
     private var pendingOutput: String = ""
 
     func appendOutput(_ text: String) {
-        // Batch updates to reduce main thread dispatches
-        pendingOutput.append(text)
+        outputLock.withLock {
+            pendingOutput.append(text)
+        }
 
-        // Cancel any pending timer
         outputUpdateTimer?.cancel()
 
-        // Create new timer for batched update
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
-            DispatchQueue.main.async {
-                self.output.append(self.pendingOutput)
+            let flushedOutput = self.outputLock.withLock { () -> String in
+                let value = self.pendingOutput
                 self.pendingOutput = ""
+                return value
+            }
+            DispatchQueue.main.async {
+                self.output.append(flushedOutput)
             }
         }
 
@@ -336,6 +390,23 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
     func clearOutput() {
         DispatchQueue.main.async {
             self.output = ""
+        }
+    }
+
+    func channel(_ channel: NMSSHChannel, didReadData message: String) {
+        appendOutput(message)
+    }
+
+    func channel(_ channel: NMSSHChannel, didReadError error: String) {
+        appendOutput(error)
+    }
+
+    func channelShellDidClose(_ channel: NMSSHChannel) {
+        DispatchQueue.main.async {
+            self.isShellActive = false
+            if self.isConnected {
+                self.appendOutput("\nRemote shell closed.\n")
+            }
         }
     }
 
@@ -389,7 +460,7 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate {
         var result: String?
         var finished = false
 
-        connection.stateUpdateHandler = { [weak self, weak connection] state in
+        connection.stateUpdateHandler = { [weak self] state in
             resultLock.lock()
             defer { resultLock.unlock() }
 

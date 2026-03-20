@@ -26,17 +26,22 @@ struct TerminalView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Connection status bar
-                if sshClient.isConnected {
-                    statusBar
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    if sshClient.isConnected {
+                        statusBar
+                    }
+                    
+                    terminalOutput
+                    
+                    commandInputBar
                 }
-                
-                // Terminal output
-                terminalOutput
-                
-                // Command input
-                commandInputBar
+                .onAppear {
+                    updateTerminalSize(for: geometry.size)
+                }
+                .onChange(of: geometry.size) { _, newSize in
+                    updateTerminalSize(for: newSize)
+                }
             }
             .navigationTitle("Terminal")
             .toolbar {
@@ -63,6 +68,16 @@ struct TerminalView: View {
             Text(connectionStatusText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            if sshClient.isConnected {
+                Text(sshClient.isShellActive ? "Shell Live" : "Shell Starting")
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(sshClient.isShellActive ? Color.green.opacity(0.15) : Color.yellow.opacity(0.15))
+                    .foregroundStyle(sshClient.isShellActive ? .green : .yellow)
+                    .clipShape(Capsule())
+            }
             
             Spacer()
             
@@ -328,6 +343,19 @@ struct TerminalView: View {
            let rootViewController = windowScene.windows.first?.rootViewController {
             rootViewController.present(activityVC, animated: true)
         }
+    }
+
+    private func updateTerminalSize(for size: CGSize) {
+        let gridSize = Self.terminalGridSize(for: size, fontSize: fontSize)
+        let width = gridSize.width
+        let height = gridSize.height
+        sshClient.requestTerminalSize(width: width, height: height)
+    }
+
+    static func terminalGridSize(for size: CGSize, fontSize: Double) -> (width: Int, height: Int) {
+        let width = max(Int(size.width / max(fontSize * 0.62, 1)), 40)
+        let height = max(Int(size.height / max(fontSize * 1.6, 1)), 12)
+        return (width, height)
     }
 }
 

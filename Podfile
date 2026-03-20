@@ -7,6 +7,7 @@ end
 
 target 'SmartSSHTests' do
   inherit! :search_paths
+  pod 'NMSSH-riden', '~> 2.7.2'
 end
 
 target 'SmartSSHUITests' do

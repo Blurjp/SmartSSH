@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import StoreKit
 @testable import SmartSSH
 
 final class SmartSSHTests: XCTestCase {
@@ -18,6 +19,11 @@ final class SmartSSHTests: XCTestCase {
     func testSSHClientDisconnectThreadSafety() throws {
         let test = SSHClientDisconnectTest()
         test.testDisconnectThreadSafety()
+    }
+
+    func testDisconnectResetsShellState() throws {
+        let test = SSHClientDisconnectTest()
+        test.testDisconnectResetsShellState()
     }
     
     func testSubscriptionManagerCancellation() async throws {
@@ -38,6 +44,16 @@ final class SmartSSHTests: XCTestCase {
     func testHistoryIndexBoundsDownNavigation() throws {
         let test = TerminalHistoryTests()
         test.testHistoryIndexBoundsDownNavigation()
+    }
+
+    func testTerminalGridSizeUsesMinimumBounds() throws {
+        let test = TerminalSizingTests()
+        test.testTerminalGridSizeUsesMinimumBounds()
+    }
+
+    func testTerminalGridSizeScalesWithViewport() throws {
+        let test = TerminalSizingTests()
+        test.testTerminalGridSizeScalesWithViewport()
     }
     
     func testPortValidation() throws {
@@ -180,6 +196,26 @@ final class SSHClientDisconnectTest {
         XCTAssertFalse(client.isConnected)
         XCTAssertEqual(client.state, .disconnected)
     }
+
+    func testDisconnectResetsShellState() {
+        let client = SSHClient.shared
+        client.state = .connected
+        client.isConnected = true
+        client.isShellActive = true
+
+        client.disconnect()
+
+        let expectation = XCTestExpectation(description: "Disconnect state applied on main queue")
+        DispatchQueue.main.async {
+            XCTAssertFalse(client.isConnected)
+            XCTAssertFalse(client.isShellActive)
+            XCTAssertEqual(client.state, .disconnected)
+            expectation.fulfill()
+        }
+
+        let result = XCTWaiter().wait(for: [expectation], timeout: 2)
+        XCTAssertEqual(result, .completed)
+    }
 }
 
 // MARK: - SubscriptionManager Cancellation Tests
@@ -212,12 +248,11 @@ final class SubscriptionManagerCancellationTest {
         XCTAssertTrue(task.isCancelled)
     }
     
-    func testListenForTransactionsCancellation() {
-        let manager = SubscriptionManager.shared
-        let updateTask = manager.updateTask
-        
+    func testListenForTransactionsCancellation() async {
+        let updateTask = await MainActor.run { SubscriptionManager.shared.updateTask }
+
         updateTask?.cancel()
-        
+
         XCTAssertTrue(updateTask?.isCancelled ?? false)
     }
 }
@@ -326,6 +361,23 @@ final class TerminalHistoryTests: XCTestCase {
         }
         
         XCTAssertTrue(true)
+    }
+}
+
+final class TerminalSizingTests: XCTestCase {
+
+    func testTerminalGridSizeUsesMinimumBounds() {
+        let result = TerminalView.terminalGridSize(for: CGSize(width: 10, height: 10), fontSize: 14)
+
+        XCTAssertEqual(result.width, 40)
+        XCTAssertEqual(result.height, 12)
+    }
+
+    func testTerminalGridSizeScalesWithViewport() {
+        let result = TerminalView.terminalGridSize(for: CGSize(width: 1000, height: 800), fontSize: 16)
+
+        XCTAssertEqual(result.width, 100)
+        XCTAssertEqual(result.height, 31)
     }
 }
 
@@ -831,10 +883,11 @@ final class WeakSelfClosureTests: XCTestCase {
     func testWeakSelfDoesNotRetain() {
         class TestObject {
             var closure: (() -> Void)?
+            var value = 42
             
             func setupClosure() {
                 closure = { [weak self] in
-                    _ = self?.description
+                    _ = self?.value
                 }
             }
         }

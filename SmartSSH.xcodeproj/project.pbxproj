@@ -308,6 +308,7 @@
 				937E65F15C8EEAFDC0CA9D16 /* [CP] Check Pods Manifest.lock */,
 				TEST88888888888888888888 /* Sources */,
 				984BBD091A732FC4D7E6D392 /* Frameworks */,
+				0710DBAA952F1DB6E0709640 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -373,6 +374,23 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		0710DBAA952F1DB6E0709640 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-SmartSSHTests/Pods-SmartSSHTests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-SmartSSHTests/Pods-SmartSSHTests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-SmartSSHTests/Pods-SmartSSHTests-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 		3653D07E6E68A28D12FD0E00 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -771,6 +789,7 @@
 				PRODUCT_MODULE_NAME = SmartSSHTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SmartSSH.app/SmartSSH";
 				TEST_TARGET_NAME = SmartSSH;
 			};
 			name = Debug;
@@ -792,6 +811,7 @@
 				PRODUCT_MODULE_NAME = SmartSSHTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SmartSSH.app/SmartSSH";
 				TEST_TARGET_NAME = SmartSSH;
 			};
 			name = Release;
