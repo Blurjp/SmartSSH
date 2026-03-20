@@ -10,10 +10,86 @@ import CoreData
 
 @objc(Host)
 public class Host: NSManagedObject, Identifiable {
-    
+
 }
 
 extension Host {
+    enum ProxyType: String, Codable, CaseIterable, Identifiable {
+        case http
+        case socks5
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .http:
+                return "HTTP"
+            case .socks5:
+                return "SOCKS5"
+            }
+        }
+    }
+
+    struct ProxyConfiguration: Codable, Equatable {
+        var type: ProxyType
+        var host: String
+        var port: Int
+        var username: String?
+        var password: String?
+
+        var displayName: String {
+            type.displayName
+        }
+
+        var isValid: Bool {
+            !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            (1...65535).contains(port)
+        }
+
+        var requiresAuth: Bool {
+            username != nil && !username!.isEmpty
+        }
+
+        var authSummary: String {
+            guard requiresAuth else { return "No auth" }
+            return "Auth: \(username!)"
+        }
+    }
+
+    struct RoutingOptions: Codable, Equatable {
+        var jumpHostID: UUID?
+        var proxy: ProxyConfiguration?
+
+        var hasRouting: Bool {
+            jumpHostID != nil || proxy != nil
+        }
+    }
+
+    struct PortForward: Codable, Identifiable, Equatable {
+        var id: UUID = UUID()
+        var name: String
+        var localPort: Int
+        var remoteHost: String
+        var remotePort: Int
+        var isEnabled: Bool
+
+        var isValid: Bool {
+            (1...65535).contains(localPort) &&
+            !remoteHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            (1...65535).contains(remotePort)
+        }
+
+        var summary: String {
+            "\(localPort) -> \(remoteHost):\(remotePort)"
+        }
+
+        // Connection statistics
+        var bytesReceived: Int64 = 0
+        var bytesSent: Int64 = 0
+        var connectionCount: Int = 0
+        var lastConnectedAt: Date?
+    }
+
     @nonobjc public class func fetchRequest() -> NSFetchRequest<Host> {
         return NSFetchRequest<Host>(entityName: "Host")
     }
@@ -27,6 +103,8 @@ extension Host {
     @NSManaged public var lastConnectedAt: Date?
     @NSManaged public var name: String?
     @NSManaged public var port: Int16
+    @NSManaged public var portForwardsData: String?
+    @NSManaged public var routingOptionsData: String?
     @NSManaged public var snippets: [String]?
     @NSManaged public var status: String?
     @NSManaged public var tags: [String]?
@@ -88,10 +166,33 @@ extension Host {
         guard let hostId = id else { return false }
         return KeychainService.shared.hasPassword(for: hostId)
     }
+
+    var portForwards: [PortForward] {
+        get {
+            decodeJSON([PortForward].self, from: portForwardsData) ?? []
+        }
+        set {
+            portForwardsData = encodeJSON(newValue)
+        }
+    }
+
+    var routingOptions: RoutingOptions? {
+        get {
+            decodeJSON(RoutingOptions.self, from: routingOptionsData)
+        }
+        set {
+            guard let newValue else {
+                routingOptionsData = nil
+                return
+            }
+            routingOptionsData = encodeJSON(newValue)
+        }
+    }
     
     // Factory method
     static func create(
         in context: NSManagedObjectContext,
+        id: UUID? = nil,
         name: String,
         hostname: String,
         port: Int16 = 22,
@@ -105,6 +206,7 @@ extension Host {
         let host = Host(context: context)
         configure(
             host,
+            id: id,
             name: name,
             hostname: hostname,
             port: port,
@@ -120,6 +222,7 @@ extension Host {
 
     static func createTransient(
         using context: NSManagedObjectContext,
+        id: UUID? = nil,
         name: String,
         hostname: String,
         port: Int16 = 22,
@@ -137,6 +240,7 @@ extension Host {
         let host = Host(entity: entity, insertInto: nil)
         configure(
             host,
+            id: id,
             name: name,
             hostname: hostname,
             port: port,
@@ -152,6 +256,7 @@ extension Host {
 
     private static func configure(
         _ host: Host,
+        id: UUID?,
         name: String,
         hostname: String,
         port: Int16,
@@ -162,7 +267,7 @@ extension Host {
         tags: [String]?,
         useKeyAuth: Bool
     ) {
-        host.id = UUID()
+        host.id = id ?? UUID()
         host.name = name
         host.hostname = hostname
         host.port = port
@@ -177,6 +282,8 @@ extension Host {
         host.status = "disconnected"
         host.color = "blue"
         host.snippets = []
+        host.portForwardsData = nil
+        host.routingOptionsData = nil
 
         if let password = password,
            !password.isEmpty,
@@ -189,5 +296,22 @@ extension Host {
     func deletePassword() {
         guard let hostId = id else { return }
         try? KeychainService.shared.deletePassword(for: hostId)
+    }
+
+    private func decodeJSON<T: Decodable>(_ type: T.Type, from value: String?) -> T? {
+        guard let value,
+              let data = value.data(using: .utf8) else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode(type, from: data)
+    }
+
+    private func encodeJSON<T: Encodable>(_ value: T) -> String? {
+        guard let data = try? JSONEncoder().encode(value) else {
+            return nil
+        }
+
+        return String(data: data, encoding: .utf8)
     }
 }

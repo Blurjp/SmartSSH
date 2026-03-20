@@ -77,6 +77,12 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate, NMSSHChannelD
     private var portForwardRuntimes: [UUID: PortForwardRuntime] = [:]
     private var lastRequestedTerminalSize: (width: Int, height: Int)?
 
+    // Connection pooling for jump hosts
+    private let tunnelSessionPoolLock = NSLock()
+    private var tunnelSessionPool: [String: LibSSH2TunnelSession] = [:]
+    private let maxPoolSize = 10
+    private let poolSessionTTL: TimeInterval = 300  // 5 minutes
+
     var host: Host? {
         sessionLock.withLock { _host }
     }
@@ -329,6 +335,7 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate, NMSSHChannelD
         oldSession?.disconnect()
         stopKeepAliveLoop()
         stopPortForwards()
+        clearTunnelSessionPool()
 
         DispatchQueue.main.async {
             self.state = .disconnected
@@ -727,6 +734,49 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate, NMSSHChannelD
                 self.isShellActive = false
                 self.appendOutput("\n⚠️ Keep-alive failed: \(error.localizedDescription)\n")
             }
+        }
+    }
+
+    // MARK: - Tunnel Session Pool Management
+
+    private func poolKey(for route: TunnelRoute) -> String {
+        var components = [route.targetHost.hostname, String(route.targetHost.port)]
+        if let jumpHost = route.jumpHost {
+            components.append(contentsOf: [jumpHost.hostname, String(jumpHost.port)])
+        }
+        if let proxy = route.proxy {
+            components.append(contentsOf: [proxy.type.rawValue, proxy.host, String(proxy.port)])
+        }
+        return components.joined(separator: "|")
+    }
+
+    private func getCachedTunnelSession(for route: TunnelRoute) -> LibSSH2TunnelSession? {
+        tunnelSessionPoolLock.withLock {
+            let key = poolKey(for: route)
+            return tunnelSessionPool[key]
+        }
+    }
+
+    private func cacheTunnelSession(_ session: LibSSH2TunnelSession, for route: TunnelRoute) {
+        tunnelSessionPoolLock.withLock {
+            // Evict oldest if pool is full
+            if tunnelSessionPool.count >= maxPoolSize {
+                let oldestKey = tunnelSessionPool.keys.first
+                if let key = oldestKey {
+                    tunnelSessionPool[key]?.close()
+                    tunnelSessionPool.removeValue(forKey: key)
+                }
+            }
+
+            let key = poolKey(for: route)
+            tunnelSessionPool[key] = session
+        }
+    }
+
+    private func clearTunnelSessionPool() {
+        tunnelSessionPoolLock.withLock {
+            tunnelSessionPool.values.forEach { $0.close() }
+            tunnelSessionPool.removeAll()
         }
     }
 }
@@ -1207,9 +1257,9 @@ private enum TunnelSocket {
             do {
                 switch proxy.type {
                 case .http:
-                    try performHTTPConnect(socketFD: socketFD, targetHost: host, targetPort: port)
+                    try performHTTPConnect(socketFD: socketFD, targetHost: host, targetPort: port, proxy: proxy)
                 case .socks5:
-                    try performSOCKS5Connect(socketFD: socketFD, targetHost: host, targetPort: port)
+                    try performSOCKS5Connect(socketFD: socketFD, targetHost: host, targetPort: port, proxy: proxy)
                 }
                 return socketFD
             } catch {
@@ -1310,23 +1360,83 @@ private enum TunnelSocket {
         fcntl(socketFD, F_SETFL, flags)
     }
 
-    private static func performHTTPConnect(socketFD: Int32, targetHost: String, targetPort: Int) throws {
-        let request = "CONNECT \(targetHost):\(targetPort) HTTP/1.1\r\nHost: \(targetHost):\(targetPort)\r\n\r\n"
+    private static func performHTTPConnect(socketFD: Int32, targetHost: String, targetPort: Int, proxy: Host.ProxyConfiguration) throws {
+        // Build CONNECT request with optional proxy authentication
+        var request = "CONNECT \(targetHost):\(targetPort) HTTP/1.1\r\nHost: \(targetHost):\(targetPort)"
+
+        // Add Proxy-Authorization header if credentials provided
+        if let username = proxy.username, let password = proxy.password {
+            let credentials = "\(username):\(password)"
+            if let credentialsData = credentials.data(using: .utf8) {
+                let base64 = credentialsData.base64EncodedString()
+                request += "\r\nProxy-Authorization: Basic \(base64)"
+            }
+        }
+
+        request += "\r\n\r\n"
+
         try writeAll(socketFD: socketFD, data: Data(request.utf8))
         let response = try readUntil(socketFD: socketFD, terminator: Data("\r\n\r\n".utf8), maxLength: 4096)
         guard let text = String(data: response, encoding: .utf8),
               text.contains(" 200 ") else {
+            if text.contains(" 407 ") {
+                throw SSHError.connectionFailed("HTTP CONNECT failed: Proxy authentication required. Check username and password.")
+            }
             throw SSHError.connectionFailed("HTTP CONNECT failed. Proxy may not support CONNECT method or denies access to \(targetHost):\(targetPort).")
         }
     }
 
-    private static func performSOCKS5Connect(socketFD: Int32, targetHost: String, targetPort: Int) throws {
-        try writeAll(socketFD: socketFD, data: Data([0x05, 0x01, 0x00]))
-        let methodReply = try readExact(socketFD: socketFD, count: 2)
-        guard methodReply.count == 2, methodReply[1] == 0x00 else {
-            throw SSHError.connectionFailed("SOCKS5 proxy requires authentication. Only anonymous (no-auth) is currently supported.")
+    private static func performSOCKS5Connect(socketFD: Int32, targetHost: String, targetPort: Int, proxy: Host.ProxyConfiguration) throws {
+        // Choose authentication method
+        var methods = Data([0x05])  // VER
+        if let username = proxy.username, let password = proxy.password {
+            methods.append(0x02)  // Number of methods
+            methods.append(0x00)  // No auth
+            methods.append(0x02)  // Username/password
+        } else {
+            methods.append(0x01)  // Number of methods
+            methods.append(0x00)  // No auth only
         }
 
+        try writeAll(socketFD: socketFD, data: methods)
+
+        let methodReply = try readExact(socketFD: socketFD, count: 2)
+        guard methodReply.count == 2, methodReply[0] == 0x05 else {
+            throw SSHError.connectionFailed("Invalid SOCKS5 version response from proxy.")
+        }
+
+        switch methodReply[1] {
+        case 0x00:
+            // No auth required - continue
+            break
+        case 0x02:
+            // Username/password auth required
+            guard let username = proxy.username, let password = proxy.password else {
+                throw SSHError.connectionFailed("SOCKS5 proxy requires username and password. Please configure proxy credentials.")
+            }
+
+            let usernameData = username.data(using: .utf8) ?? Data()
+            let passwordData = password.data(using: .utf8) ?? Data()
+
+            var auth = Data([0x01])  // Version
+            auth.append(UInt8(usernameData.count))
+            auth.append(usernameData)
+            auth.append(UInt8(passwordData.count))
+            auth.append(passwordData)
+
+            try writeAll(socketFD: socketFD, data: auth)
+
+            let authReply = try readExact(socketFD: socketFD, count: 2)
+            guard authReply.count == 2, authReply[1] == 0x00 else {
+                throw SSHError.connectionFailed("SOCKS5 authentication failed. Check proxy username and password.")
+            }
+        case 0xFF:
+            throw SSHError.connectionFailed("SOCKS5 proxy rejected all authentication methods.")
+        default:
+            throw SSHError.connectionFailed("SOCKS5 proxy selected unsupported authentication method (0x\(String(format: "%02X", methodReply[1]))).")
+        }
+
+        // Send CONNECT request
         var request = Data([0x05, 0x01, 0x00])
         if let ipv4 = IPv4Address(targetHost) {
             request.append(0x01)
@@ -1343,7 +1453,11 @@ private enum TunnelSocket {
         try writeAll(socketFD: socketFD, data: request)
 
         let header = try readExact(socketFD: socketFD, count: 4)
-        guard header.count == 4, header[1] == 0x00 else {
+        guard header.count == 4, header[0] == 0x05 else {
+            throw SSHError.connectionFailed("Invalid SOCKS5 response.")
+        }
+
+        guard header[1] == 0x00 else {
             throw SSHError.connectionFailed("SOCKS5 CONNECT to \(targetHost):\(targetPort) failed. Check proxy configuration and destination accessibility.")
         }
 
