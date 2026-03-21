@@ -354,7 +354,8 @@ class Coordinator: NSObject, UITextViewDelegate {
         let promptEndIndex = promptLocation + promptLength
         guard fullText.utf16.count >= promptEndIndex else { return }
 
-        let startIndex = fullText.index(fullText.startIndex, offsetBy: promptEndIndex)
+        // Use UTF-16 index to handle multi-byte characters correctly
+        guard let startIndex = fullText.utf16.index(fullText.startIndex, offsetBy: promptEndIndex, limitedBy: fullText.endIndex) else { return }
         let commandText = String(fullText[startIndex...]).trimmingCharacters(in: .newlines)
 
         // Add to history (skip empty and duplicates)
@@ -394,8 +395,10 @@ class Coordinator: NSObject, UITextViewDelegate {
 
         // Save current input on first navigation
         if historyIndex == -1 {
-            let startIndex = fullText.index(fullText.startIndex, offsetBy: min(promptEndIndex, fullText.utf16.count))
-            savedCurrentInput = String(fullText[startIndex...])
+            let safeIndex = min(promptEndIndex, fullText.utf16.count)
+            if let startIndex = fullText.utf16.index(fullText.startIndex, offsetBy: safeIndex, limitedBy: fullText.endIndex) {
+                savedCurrentInput = String(fullText[startIndex...])
+            }
         }
 
         // Calculate new index
@@ -419,8 +422,9 @@ class Coordinator: NSObject, UITextViewDelegate {
             commandText = commandHistory[historyIndex]
         }
 
-        // Replace text after prompt
-        let promptEnd = fullText.index(fullText.startIndex, offsetBy: promptEndIndex)
+        // Replace text after prompt using UTF-16 safe indexing
+        let safePromptEnd = min(promptEndIndex, fullText.utf16.count)
+        guard let promptEnd = fullText.utf16.index(fullText.startIndex, offsetBy: safePromptEnd, limitedBy: fullText.endIndex) else { return }
         let newText = String(fullText[..<promptEnd]) + commandText
 
         textView.text = newText
