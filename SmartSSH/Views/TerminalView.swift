@@ -192,6 +192,15 @@ struct TerminalTextView: UIViewRepresentable {
 
         textView.delegate = context.coordinator
 
+        // Add key commands for arrow keys
+        let upArrow = UIKeyCommand(input: UIKeyCommand.inputUpArrow, modifierFlags: [], action: #selector(Coordinator.handleArrowKey(_:)))
+        upArrow.discoverabilityTitle = "Previous command"
+        let downArrow = UIKeyCommand(input: UIKeyCommand.inputDownArrow, modifierFlags: [], action: #selector(Coordinator.handleArrowKey(_:)))
+        downArrow.discoverabilityTitle = "Next command"
+
+        textView.addKeyCommand(upArrow)
+        textView.addKeyCommand(downArrow)
+
         // Store reference
         context.coordinator.textView = textView
 
@@ -229,30 +238,44 @@ class Coordinator: NSObject, UITextViewDelegate {
     // Command history
     private var commandHistory: [String] = []
     private var historyIndex: Int = -1
+    private var savedCurrentInput: String = ""
     private let maxHistorySize = 100
 
-    // Track prompt position
-    private var promptRange: NSRange?
+    // Track prompt position - use last known good position
+    private var promptLocation: Int = 0
+    private var promptLength: Int = 0
 
     // Initialize terminal size
     private var terminalWidth: Int = 80
     private var terminalHeight: Int = 24
 
+    // Track if we're processing output to prevent recursive updates
+    private var isUpdatingOutput: Bool = false
+
     init(sshClient: SSHClient) {
         self.sshClient = sshClient
         super.init()
 
-        // Observe output changes
+        // Observe output changes - dispatch to main queue to avoid race conditions
         sshClient.objectWillChange.sink { [weak self] _ in
-            self?.updateOutputIfNeeded()
+            DispatchQueue.main.async {
+                self?.updateOutputIfNeeded()
+            }
         }.store(in: &cancellables)
     }
 
     private var cancellables: Set<AnyCancellable> = []
 
+    deinit {
+        cancellables.removeAll()
+    }
+
     // MARK: - UITextViewDelegate
 
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        // Prevent recursive updates
+        guard !isUpdatingOutput else { return false }
+
         // Handle Enter key - execute command
         if text == "\n" {
             executeCurrentCommand(textView)
@@ -260,18 +283,17 @@ class Coordinator: NSObject, UITextViewDelegate {
         }
 
         // Prevent editing before the prompt (protect existing output)
-        if let promptRange = promptRange {
-            if range.location < promptRange.location {
-                return false
-            }
+        let promptStart = promptLocation
+        if range.location < promptStart {
+            return false
         }
 
         return true
     }
 
     func textViewDidChange(_ textView: UITextView) {
-        // Update prompt range as user types
-        updatePromptRange()
+        // Reset history index when user types
+        historyIndex = -1
     }
 
     func textViewDidBeginEditing(_ textView: UITextView) {
@@ -281,36 +303,114 @@ class Coordinator: NSObject, UITextViewDelegate {
         }
     }
 
+    // Handle keyboard events for command history
+    func handleKeyCommand(_ keyCommand: UIKeyCommand) -> Bool {
+        guard let textView = textView else { return false }
+
+        if keyCommand.input == UIKeyCommand.inputUpArrow {
+            navigateHistory(.up, in: textView)
+            return true
+        } else if keyCommand.input == UIKeyCommand.inputDownArrow {
+            navigateHistory(.down, in: textView)
+            return true
+        }
+
+        return false
+    }
+
+    // Objc selector for UIKeyCommand
+    @objc func handleArrowKey(_ sender: UIKeyCommand) {
+        guard let textView = textView else { return }
+
+        if sender.input == UIKeyCommand.inputUpArrow {
+            navigateHistory(.up, in: textView)
+        } else if sender.input == UIKeyCommand.inputDownArrow {
+            navigateHistory(.down, in: textView)
+        }
+    }
+
     // MARK: - Command Execution
 
     private func executeCurrentCommand(_ textView: UITextView) {
-        guard let promptRange = promptRange else { return }
+        let fullText = textView.text ?? ""
 
         // Extract command text (everything after prompt)
-        let fullText = textView.text ?? ""
-        let startIndex = fullText.index(fullText.startIndex, offsetBy: promptRange.location + promptRange.length)
+        let promptEndIndex = promptLocation + promptLength
+        guard fullText.utf16.count >= promptEndIndex else { return }
+
+        let startIndex = fullText.index(fullText.startIndex, offsetBy: promptEndIndex)
         let commandText = String(fullText[startIndex...]).trimmingCharacters(in: .newlines)
 
-        // Clear empty commands or add to history
-        if !commandText.isEmpty {
-            // Add to history
+        // Add to history (skip empty and duplicates)
+        if !commandText.isEmpty && commandHistory.first != commandText {
             commandHistory.insert(commandText, at: 0)
             if commandHistory.count > maxHistorySize {
-                commandHistory = Array(commandHistory.prefix(maxHistorySize))
-            }
-            historyIndex = -1
-
-            // Execute command via SSH client
-            sshClient.execute(command: commandText) { [weak self] result in
-                // Command completed - output will be updated via observer
+                commandHistory.removeLast()
             }
         }
 
         // Reset history index
         historyIndex = -1
+        savedCurrentInput = ""
 
-        // Update terminal size
-        updateTerminalSize()
+        // Execute command via SSH client
+        if !commandText.isEmpty {
+            sshClient.execute(command: commandText) { [weak self] result in
+                // Command completed - output will be updated via observer
+                DispatchQueue.main.async {
+                    self?.updateTerminalSize()
+                }
+            }
+        }
+    }
+
+    // MARK: - Command History Navigation
+
+    private enum HistoryDirection {
+        case up, down
+    }
+
+    private func navigateHistory(_ direction: HistoryDirection, in textView: UITextView) {
+        guard !commandHistory.isEmpty else { return }
+
+        let fullText = textView.text ?? ""
+        let promptEndIndex = promptLocation + promptLength
+
+        // Save current input on first navigation
+        if historyIndex == -1 {
+            let startIndex = fullText.index(fullText.startIndex, offsetBy: min(promptEndIndex, fullText.utf16.count))
+            savedCurrentInput = String(fullText[startIndex...])
+        }
+
+        // Calculate new index
+        let newIndex: Int
+        switch direction {
+        case .up:
+            newIndex = min(historyIndex + 1, commandHistory.count - 1)
+        case .down:
+            newIndex = max(historyIndex - 1, -1)
+        }
+
+        // Skip if no change
+        guard newIndex != historyIndex else { return }
+        historyIndex = newIndex
+
+        // Get the command to display
+        let commandText: String
+        if historyIndex == -1 {
+            commandText = savedCurrentInput
+        } else {
+            commandText = commandHistory[historyIndex]
+        }
+
+        // Replace text after prompt
+        let promptEnd = fullText.index(fullText.startIndex, offsetBy: promptEndIndex)
+        let newText = String(fullText[..<promptEnd]) + commandText
+
+        textView.text = newText
+
+        // Move cursor to end
+        textView.selectedRange = NSRange(location: newText.utf16.count, length: 0)
     }
 
     // MARK: - Output Management
@@ -320,12 +420,15 @@ class Coordinator: NSObject, UITextViewDelegate {
     }
 
     private func updateOutputIfNeeded() {
-        guard let textView = textView else { return }
+        guard let textView = textView, !isUpdatingOutput else { return }
 
         let currentOutput = sshClient.output
 
         // Only update if output has changed
         if currentOutput != lastProcessedOutput {
+            isUpdatingOutput = true
+            defer { isUpdatingOutput = false }
+
             lastProcessedOutput = currentOutput
 
             // Calculate new content to append
@@ -343,17 +446,21 @@ class Coordinator: NSObject, UITextViewDelegate {
         // Save current selected range
         let wasEditing = textView.isFirstResponder
         let currentRange = textView.selectedRange
+        let oldTextLength = textView.text?.utf16.count ?? 0
 
         // Append new text
         let currentText = textView.text ?? ""
         textView.text = currentText + text
 
-        // Update prompt range
-        updatePromptRange()
+        // Update prompt position - track the end of output
+        detectAndUpdatePromptPosition()
 
-        // Auto-scroll to bottom if not manually scrolling
-        if wasEditing || currentRange.location == currentText.utf16.count {
+        // Auto-scroll to bottom if cursor was at end
+        let wasAtEnd = currentRange.location >= oldTextLength - 1
+        if wasEditing || wasAtEnd {
             scrollToBottom()
+            // Move cursor to end after output
+            textView.selectedRange = NSRange(location: textView.text?.utf16.count ?? 0, length: 0)
         }
 
         // Restore editing state
@@ -362,22 +469,38 @@ class Coordinator: NSObject, UITextViewDelegate {
         }
     }
 
-    private func updatePromptRange() {
+    private func detectAndUpdatePromptPosition() {
         guard let textView = textView, let text = textView.text else { return }
 
-        // Find the last prompt position (last "$ " or "# " in the text)
-        let nsString = text as NSString
-        let promptPatterns = ["$ ", "# ", "➜ "]
+        // The prompt position is at the end of the text
+        // We track where the user can start typing
+        let textLength = text.utf16.count
 
-        var lastPromptLocation: Int?
+        // Look for common prompt patterns at the end of text
+        let nsString = text as NSString
+
+        // Common prompt endings: "$ ", "# ", "➜ ", "> "
+        let promptPatterns = ["$ ", "# ", "➜ ", "> ", "% "]
+
+        var foundPromptEnd = false
         for pattern in promptPatterns {
-            let range = nsString.range(of: pattern, options: .backwards)
+            // Check if text ends with this pattern or contains it near the end
+            let searchRange = NSRange(location: max(0, textLength - 200), length: min(200, textLength))
+            let range = nsString.range(of: pattern, options: [.backwards], range: searchRange)
+
             if range.location != NSNotFound {
-                if lastPromptLocation == nil || range.location > lastPromptLocation! {
-                    lastPromptLocation = range.location
-                    promptRange = NSRange(location: range.location, length: pattern.count)
-                }
+                // Found a prompt - set typing position after it
+                promptLocation = range.location
+                promptLength = pattern.count
+                foundPromptEnd = true
+                break
             }
+        }
+
+        // Fallback: if no prompt found, allow typing at end
+        if !foundPromptEnd {
+            promptLocation = textLength
+            promptLength = 0
         }
     }
 
@@ -398,6 +521,7 @@ class Coordinator: NSObject, UITextViewDelegate {
         // Set initial text
         if !sshClient.output.isEmpty {
             textView.text = sshClient.output
+            detectAndUpdatePromptPosition()
         } else {
             // Show welcome message
             let welcome = """
@@ -414,14 +538,16 @@ class Coordinator: NSObject, UITextViewDelegate {
             textView.text = welcome
             lastProcessedOutput = welcome
             processedLength = welcome.count
+            // No prompt in welcome screen - allow typing at end
+            promptLocation = welcome.utf16.count
+            promptLength = 0
         }
 
-        updatePromptRange()
         scrollToBottom()
 
         // Request keyboard focus
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak textView] in
-            textView?.becomeFirstResponder()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.textView?.becomeFirstResponder()
         }
     }
 
