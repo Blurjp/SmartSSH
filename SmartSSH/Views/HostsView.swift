@@ -387,9 +387,7 @@ struct HostsView: View {
                     host.status = "connected"
                     // Navigate to Terminal tab after successful connection
                     NotificationCenter.default.post(name: .smartSSHSelectTab, object: 1)
-                    // Show a brief success message
-                    self.connectionMessage = "Connected to \(hostName)"
-                    self.showingConnectionAlert = true
+                    // Don't show alert on successful connection - just navigate to terminal
                 case .failure(let error):
                     host.status = "error"
                     self.connectionMessage = "Connection failed: \(error.localizedDescription)"

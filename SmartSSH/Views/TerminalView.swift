@@ -460,17 +460,51 @@ class Coordinator: NSObject, UITextViewDelegate {
         }
     }
 
+    /// Strip ANSI escape codes from terminal output
+    private static func stripANSIEscapeCodes(from text: String) -> String {
+        // ANSI escape sequences start with ESC (0x1b = 27) followed by [
+        // Common patterns:
+        // - ESC[K : Erase to end of line
+        // - ESC[?2004h : Enable bracketed paste mode
+        // - ESC[?2004l : Disable bracketed paste mode
+        // - ESC[<n>m : Set graphics mode (colors, bold, etc.)
+        // - ESC[<n>A/B/C/D : Cursor movement
+        // - ESC[<n>;<n>H : Cursor position
+        // - ESC[?<n>h/l : Private mode set/reset
+
+        var result = text
+        // ESC character as Character
+        let esc = Character(UnicodeScalar(27))
+
+        // Match ESC followed by [ and any parameters ending with a letter or ? sequences
+        let ansiPattern = "\\u001b\\[[0-9;?]*[a-zA-Z]"
+
+        if let regex = try? NSRegularExpression(pattern: ansiPattern, options: []) {
+            let range = NSRange(result.startIndex..., in: result)
+            result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "")
+        }
+
+        // Also strip bare ESC characters followed by [ that might be incomplete
+        let escBracket = String(esc) + "["
+        result = result.replacingOccurrences(of: escBracket, with: "")
+
+        return result
+    }
+
     private func appendOutput(_ text: String) {
         guard let textView = textView, !text.isEmpty else { return }
+
+        // Filter out ANSI escape codes
+        let filteredText = Self.stripANSIEscapeCodes(from: text)
 
         // Save current selected range
         let wasEditing = textView.isFirstResponder
         let currentRange = textView.selectedRange
         let oldTextLength = textView.text?.utf16.count ?? 0
 
-        // Append new text
+        // Append filtered text
         let currentText = textView.text ?? ""
-        textView.text = currentText + text
+        textView.text = currentText + filteredText
 
         // Update prompt position - track the end of output
         detectAndUpdatePromptPosition()
