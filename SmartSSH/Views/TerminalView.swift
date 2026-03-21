@@ -166,14 +166,38 @@ struct TerminalView: View {
     }
 }
 
+// MARK: - Custom Terminal TextView with Key Commands
+
+class CustomTerminalTextView: UITextView {
+    weak var coordinator: Coordinator?
+
+    override var keyCommands: [UIKeyCommand]? {
+        var commands = super.keyCommands ?? []
+
+        let upArrow = UIKeyCommand(input: UIKeyCommand.inputUpArrow, modifierFlags: [], action: #selector(handleArrowKey(_:)))
+        upArrow.discoverabilityTitle = "Previous command"
+        let downArrow = UIKeyCommand(input: UIKeyCommand.inputDownArrow, modifierFlags: [], action: #selector(handleArrowKey(_:)))
+        downArrow.discoverabilityTitle = "Next command"
+
+        commands.append(upArrow)
+        commands.append(downArrow)
+
+        return commands
+    }
+
+    @objc func handleArrowKey(_ sender: UIKeyCommand) {
+        coordinator?.handleArrowKey(sender)
+    }
+}
+
 // MARK: - Terminal TextView (UIViewRepresentable)
 
 struct TerminalTextView: UIViewRepresentable {
     @ObservedObject var sshClient: SSHClient
     let fontSize: Double
 
-    func makeUIView(context: Context) -> UITextView {
-        let textView = UITextView()
+    func makeUIView(context: Context) -> CustomTerminalTextView {
+        let textView = CustomTerminalTextView()
         textView.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         textView.backgroundColor = .black
         textView.textColor = .green
@@ -191,15 +215,7 @@ struct TerminalTextView: UIViewRepresentable {
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
 
         textView.delegate = context.coordinator
-
-        // Add key commands for arrow keys
-        let upArrow = UIKeyCommand(input: UIKeyCommand.inputUpArrow, modifierFlags: [], action: #selector(Coordinator.handleArrowKey(_:)))
-        upArrow.discoverabilityTitle = "Previous command"
-        let downArrow = UIKeyCommand(input: UIKeyCommand.inputDownArrow, modifierFlags: [], action: #selector(Coordinator.handleArrowKey(_:)))
-        downArrow.discoverabilityTitle = "Next command"
-
-        textView.addKeyCommand(upArrow)
-        textView.addKeyCommand(downArrow)
+        textView.coordinator = context.coordinator
 
         // Store reference
         context.coordinator.textView = textView
@@ -210,7 +226,7 @@ struct TerminalTextView: UIViewRepresentable {
         return textView
     }
 
-    func updateUIView(_ textView: UITextView, context: Context) {
+    func updateUIView(_ textView: CustomTerminalTextView, context: Context) {
         // Update font size if changed
         if CGFloat(fontSize) != textView.font?.pointSize {
             textView.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
@@ -228,7 +244,7 @@ struct TerminalTextView: UIViewRepresentable {
 // MARK: - Coordinator
 
 class Coordinator: NSObject, UITextViewDelegate {
-    var textView: UITextView?
+    weak var textView: CustomTerminalTextView?
     let sshClient: SSHClient
 
     // Track output state
