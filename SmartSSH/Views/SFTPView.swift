@@ -14,6 +14,7 @@ import UIKit
 
 struct SFTPView: View {
     @ObservedObject private var sftpClient = SFTPClient.shared
+    @ObservedObject private var sessionStore = SessionStore.shared
     @State private var selectedFile: SFTPFile?
     @State private var showingFileActions = false
     @State private var showingCreateDirectory = false
@@ -110,11 +111,17 @@ struct SFTPView: View {
                     refreshList()
                 }
             }
+            .onChange(of: sessionStore.selectedSessionID) { _, _ in
+                sftpClient.resetNavigation()
+                if sshConnected {
+                    refreshList()
+                }
+            }
         }
     }
 
     private var sshConnected: Bool {
-        SSHClient.shared.isConnected
+        sessionStore.selectedSession?.client.isConnected == true
     }
     
     // MARK: - View Components

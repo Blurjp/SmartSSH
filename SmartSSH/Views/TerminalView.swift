@@ -12,38 +12,249 @@ import UIKit
 #endif
 
 struct TerminalView: View {
-    @ObservedObject private var sshClient = SSHClient.shared
+    @ObservedObject private var sessionStore = SessionStore.shared
     @AppStorage("terminalFontSize") private var fontSize = 14.0
+    @AppStorage("terminalFont") private var fontName = "Menlo"
+    @AppStorage("terminalColorScheme") private var colorScheme = "dark"
+    @State private var savedSnippets: [Snippet] = []
+    @State private var showingCommandLibrary = false
+
+    private var theme: TerminalTheme {
+        TerminalTheme(named: colorScheme)
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if sshClient.isConnected {
-                    statusBar
+                if !sessionStore.sessions.isEmpty {
+                    sessionSwitcher
                 }
 
-                // Single unified terminal view with inline input
-                TerminalTextView(
-                    sshClient: sshClient,
-                    fontSize: fontSize
-                )
+                if let selectedSession = sessionStore.selectedSession {
+                    ActiveTerminalSessionView(
+                        storedSession: selectedSession,
+                        fontSize: fontSize,
+                        fontName: fontName,
+                        theme: theme,
+                        savedSnippets: savedSnippets,
+                        showingCommandLibrary: $showingCommandLibrary,
+                        onLoadSnippets: loadSavedSnippets
+                    )
+                    .id(selectedSession.id)
+                } else {
+                    Color.clear
+                }
             }
-            .background(Color.black)
+            .background(theme.background)
             .navigationTitle("Terminal")
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
                     toolbarMenu
                 }
             }
+            .onAppear(perform: loadSavedSnippets)
             .overlay {
-                if !sshClient.isConnected {
+                if sessionStore.selectedSession == nil {
                     disconnectedOverlay
                 }
+            }
+            .sheet(isPresented: $showingCommandLibrary) {
+                CommandLibraryView(
+                    snippets: savedSnippets,
+                    onRun: { command in
+                        guard let sshClient = sessionStore.selectedSession?.client else { return }
+                        runCommand(command, using: sshClient)
+                    },
+                    onInsert: { command in
+                        guard let sshClient = sessionStore.selectedSession?.client else { return }
+                        insertCommand(command, using: sshClient)
+                    },
+                    onRefresh: loadSavedSnippets
+                )
             }
         }
     }
 
-    // MARK: - View Components
+    private var sessionSwitcher: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(sessionStore.sessions) { storedSession in
+                    SessionChipView(
+                        storedSession: storedSession,
+                        isSelected: storedSession.id == sessionStore.selectedSession?.id,
+                        theme: theme,
+                        onSelect: { sessionStore.select(sessionID: storedSession.id) },
+                        onClose: { sessionStore.disconnect(sessionID: storedSession.id) }
+                    )
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+        }
+        .background(theme.chromeBackground)
+    }
+
+    private var toolbarMenu: some View {
+        Menu {
+            Button {
+                loadSavedSnippets()
+                showingCommandLibrary = true
+            } label: {
+                Label("Command Library", systemImage: "square.grid.2x2")
+            }
+
+            Divider()
+
+            Menu {
+                Button("Smaller") {
+                    fontSize = max(10, fontSize - 2)
+                }
+                Button("Larger") {
+                    fontSize = min(24, fontSize + 2)
+                }
+                Divider()
+                Button("Reset to Default") {
+                    fontSize = 14
+                }
+            } label: {
+                Label("Font Size", systemImage: "textformat.size")
+            }
+
+            if let sshClient = sessionStore.selectedSession?.client {
+                Divider()
+
+                Button {
+                    sshClient.clearOutput()
+                } label: {
+                    Label("Clear Output", systemImage: "trash")
+                }
+
+                Button {
+                    exportLog(output: sshClient.output)
+                } label: {
+                    Label("Export Log", systemImage: "square.and.arrow.up")
+                }
+            }
+
+            if sessionStore.selectedSession != nil {
+                Divider()
+
+                Button(role: .destructive) {
+                    sessionStore.disconnectSelectedSession()
+                } label: {
+                    Label("Close Session", systemImage: "xmark.circle")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+    }
+
+    private var disconnectedOverlay: some View {
+        ContentUnavailableView {
+            Label("No Active Session", systemImage: "terminal")
+        } description: {
+            Text("Connect to hosts from the Hosts tab to open terminal sessions.")
+        } actions: {
+            Button("Go to Hosts") {
+                NotificationCenter.default.post(name: .smartSSHSelectTab, object: 0)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .background(theme.background)
+    }
+
+    private func exportLog(output: String) {
+        let activityVC = UIActivityViewController(
+            activityItems: [output],
+            applicationActivities: nil
+        )
+
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootViewController = windowScene.windows.first?.rootViewController {
+            rootViewController.present(activityVC, animated: true)
+        }
+    }
+
+    private func loadSavedSnippets() {
+        guard let data = UserDefaults.standard.data(forKey: "saved_snippets"),
+              let snippets = try? JSONDecoder().decode([Snippet].self, from: data) else {
+            savedSnippets = []
+            return
+        }
+
+        savedSnippets = snippets.sorted { lhs, rhs in
+            let lhsDate = lhs.lastUsedAt ?? lhs.createdAt
+            let rhsDate = rhs.lastUsedAt ?? rhs.createdAt
+            return lhsDate > rhsDate
+        }
+    }
+
+    private func runCommand(_ command: String, using sshClient: SSHClient) {
+        guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        sshClient.sendInput(command, addNewline: true) { result in
+            if case .failure = result {
+                sshClient.execute(command: command) { _ in }
+            }
+        }
+    }
+
+    private func insertCommand(_ command: String, using sshClient: SSHClient) {
+        guard !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        sshClient.sendInput(command) { result in
+            if case .failure = result {
+                UIPasteboard.general.string = command
+            }
+        }
+    }
+}
+
+private struct ActiveTerminalSessionView: View {
+    let storedSession: StoredSession
+    let fontSize: Double
+    let fontName: String
+    let theme: TerminalTheme
+    let savedSnippets: [Snippet]
+    @Binding var showingCommandLibrary: Bool
+    let onLoadSnippets: () -> Void
+
+    @ObservedObject private var sshClient: SSHClient
+
+    init(
+        storedSession: StoredSession,
+        fontSize: Double,
+        fontName: String,
+        theme: TerminalTheme,
+        savedSnippets: [Snippet],
+        showingCommandLibrary: Binding<Bool>,
+        onLoadSnippets: @escaping () -> Void
+    ) {
+        self.storedSession = storedSession
+        self.fontSize = fontSize
+        self.fontName = fontName
+        self.theme = theme
+        self.savedSnippets = savedSnippets
+        self._showingCommandLibrary = showingCommandLibrary
+        self.onLoadSnippets = onLoadSnippets
+        _sshClient = ObservedObject(wrappedValue: storedSession.client)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            statusBar
+
+            TerminalTextView(
+                sshClient: sshClient,
+                fontSize: fontSize,
+                fontName: fontName,
+                theme: theme
+            )
+
+            if sshClient.isConnected {
+                commandTray
+            }
+        }
+    }
 
     private var statusBar: some View {
         HStack {
@@ -65,17 +276,98 @@ struct TerminalView: View {
                     .clipShape(Capsule())
             }
 
+            if !sshClient.activePortForwardPorts.isEmpty {
+                Text("Forwards \(sshClient.activePortForwardPorts.map(String.init).joined(separator: ", "))")
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.blue.opacity(0.15))
+                    .foregroundStyle(.blue)
+                    .clipShape(Capsule())
+            }
+
             Spacer()
 
-            if let host = sshClient.host {
-                Text(host.displayInfo)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Text(storedSession.host.displayInfo)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(Color(.systemGray6))
+        .background(theme.chromeBackground)
+    }
+
+    private var commandTray: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                commandButton(title: "Library", subtitle: "Saved", systemImage: "square.grid.2x2") {
+                    onLoadSnippets()
+                    showingCommandLibrary = true
+                }
+
+                ForEach(QuickActionsView.availableActions) { action in
+                    commandButton(
+                        title: action.title,
+                        subtitle: action.subtitle,
+                        systemImage: action.icon
+                    ) {
+                        sshClient.sendInput(action.command, addNewline: true) { result in
+                            if case .failure = result {
+                                sshClient.execute(command: action.command) { _ in }
+                            }
+                        }
+                    }
+                }
+
+                ForEach(savedSnippets.prefix(6)) { snippet in
+                    commandButton(
+                        title: snippet.name,
+                        subtitle: snippet.command,
+                        systemImage: "text.badge.plus"
+                    ) {
+                        sshClient.sendInput(snippet.command, addNewline: true) { result in
+                            if case .failure = result {
+                                sshClient.execute(command: snippet.command) { _ in }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+        }
+        .background(theme.chromeBackground)
+    }
+
+    private func commandButton(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.headline)
+                    .foregroundStyle(theme.accent)
+
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(theme.text)
+                    .lineLimit(1)
+
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(theme.secondaryText)
+                    .lineLimit(1)
+            }
+            .frame(width: 110, alignment: .leading)
+            .padding(10)
+            .background(theme.panelBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private var connectionStatusText: String {
@@ -87,82 +379,69 @@ struct TerminalView: View {
         case .error(let msg): return "Error: \(msg)"
         }
     }
+}
 
-    private var toolbarMenu: some View {
-        Menu {
-            // Font size controls
-            Menu {
-                Button("Smaller") {
-                    fontSize = max(10, fontSize - 2)
-                }
-                Button("Larger") {
-                    fontSize = min(24, fontSize + 2)
-                }
-                Divider()
-                Button("Reset to Default") {
-                    fontSize = 14
-                }
-            } label: {
-                Label("Font Size", systemImage: "textformat.size")
-            }
+private struct SessionChipView: View {
+    let storedSession: StoredSession
+    let isSelected: Bool
+    let theme: TerminalTheme
+    let onSelect: () -> Void
+    let onClose: () -> Void
 
-            Divider()
+    @ObservedObject private var sshClient: SSHClient
 
-            // Clear output
-            Button {
-                sshClient.clearOutput()
-            } label: {
-                Label("Clear Output", systemImage: "trash")
-            }
-
-            // Export log
-            Button {
-                exportLog()
-            } label: {
-                Label("Export Log", systemImage: "square.and.arrow.up")
-            }
-
-            Divider()
-
-            // Disconnect
-            if sshClient.isConnected {
-                Button(role: .destructive) {
-                    sshClient.disconnect()
-                } label: {
-                    Label("Disconnect", systemImage: "xmark.circle")
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-        }
+    init(
+        storedSession: StoredSession,
+        isSelected: Bool,
+        theme: TerminalTheme,
+        onSelect: @escaping () -> Void,
+        onClose: @escaping () -> Void
+    ) {
+        self.storedSession = storedSession
+        self.isSelected = isSelected
+        self.theme = theme
+        self.onSelect = onSelect
+        self.onClose = onClose
+        _sshClient = ObservedObject(wrappedValue: storedSession.client)
     }
 
-    private var disconnectedOverlay: some View {
-        ContentUnavailableView {
-            Label("No Active Session", systemImage: "terminal")
-        } description: {
-            Text("Connect to a host from the Hosts tab to start a terminal session.")
-        } actions: {
-            Button("Go to Hosts") {
-                NotificationCenter.default.post(name: .smartSSHSelectTab, object: 0)
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: onSelect) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.appNamed(sshClient.state.color))
+                        .frame(width: 8, height: 8)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(storedSession.host.wrappedName)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+
+                        Text(storedSession.host.wrappedUsername)
+                            .font(.caption2)
+                            .foregroundStyle(theme.secondaryText)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(isSelected ? theme.panelBackground : theme.background.opacity(0.7))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.plain)
+
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.caption2)
+                    .foregroundStyle(theme.secondaryText)
+            }
+            .buttonStyle(.plain)
         }
-        .background(Color.black)
-    }
-
-    // MARK: - Actions
-
-    private func exportLog() {
-        let activityVC = UIActivityViewController(
-            activityItems: [sshClient.output],
-            applicationActivities: nil
-        )
-
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootViewController = windowScene.windows.first?.rootViewController {
-            rootViewController.present(activityVC, animated: true)
-        }
+        .padding(4)
+        .background(isSelected ? theme.background.opacity(0.35) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -195,12 +474,15 @@ class CustomTerminalTextView: UITextView {
 struct TerminalTextView: UIViewRepresentable {
     @ObservedObject var sshClient: SSHClient
     let fontSize: Double
+    let fontName: String
+    let theme: TerminalTheme
 
     func makeUIView(context: Context) -> CustomTerminalTextView {
         let textView = CustomTerminalTextView()
-        textView.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
-        textView.backgroundColor = .black
-        textView.textColor = .green
+        textView.font = resolvedFont()
+        textView.backgroundColor = UIColor(theme.background)
+        textView.textColor = UIColor(theme.text)
+        textView.tintColor = UIColor(theme.accent)
         textView.isEditable = true
         textView.isSelectable = true
         textView.autocapitalizationType = .none
@@ -227,17 +509,27 @@ struct TerminalTextView: UIViewRepresentable {
     }
 
     func updateUIView(_ textView: CustomTerminalTextView, context: Context) {
-        // Update font size if changed
-        if CGFloat(fontSize) != textView.font?.pointSize {
-            textView.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let updatedFont = resolvedFont()
+        if textView.font?.fontName != updatedFont.fontName || textView.font?.pointSize != updatedFont.pointSize {
+            textView.font = updatedFont
         }
+        textView.backgroundColor = UIColor(theme.background)
+        textView.textColor = UIColor(theme.text)
+        textView.tintColor = UIColor(theme.accent)
 
-        // Update output when it changes
         context.coordinator.checkForOutputUpdates()
     }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(sshClient: sshClient)
+    }
+
+    private func resolvedFont() -> UIFont {
+        if let customFont = UIFont(name: fontName, size: fontSize) {
+            return customFont
+        }
+
+        return UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
     }
 }
 
@@ -635,4 +927,206 @@ import Combine
 
 #Preview {
     TerminalView()
+}
+
+private struct TerminalTheme {
+    let background: Color
+    let chromeBackground: Color
+    let panelBackground: Color
+    let text: Color
+    let secondaryText: Color
+    let accent: Color
+
+    init(named name: String) {
+        switch name {
+        case "light":
+            background = Color(red: 0.98, green: 0.98, blue: 0.97)
+            chromeBackground = Color(red: 0.92, green: 0.93, blue: 0.91)
+            panelBackground = Color.white
+            text = Color.black
+            secondaryText = Color.gray
+            accent = Color.blue
+        case "solarized-dark":
+            background = Color(red: 0.0, green: 0.17, blue: 0.21)
+            chromeBackground = Color(red: 0.03, green: 0.21, blue: 0.26)
+            panelBackground = Color(red: 0.02, green: 0.24, blue: 0.29)
+            text = Color(red: 0.51, green: 0.58, blue: 0.59)
+            secondaryText = Color(red: 0.36, green: 0.47, blue: 0.5)
+            accent = Color(red: 0.15, green: 0.55, blue: 0.82)
+        case "dracula":
+            background = Color(red: 0.11, green: 0.11, blue: 0.16)
+            chromeBackground = Color(red: 0.16, green: 0.16, blue: 0.23)
+            panelBackground = Color(red: 0.2, green: 0.2, blue: 0.29)
+            text = Color(red: 0.97, green: 0.97, blue: 0.95)
+            secondaryText = Color(red: 0.67, green: 0.65, blue: 0.75)
+            accent = Color(red: 1.0, green: 0.47, blue: 0.78)
+        case "monokai":
+            background = Color(red: 0.15, green: 0.16, blue: 0.13)
+            chromeBackground = Color(red: 0.19, green: 0.2, blue: 0.16)
+            panelBackground = Color(red: 0.23, green: 0.24, blue: 0.2)
+            text = Color(red: 0.97, green: 0.97, blue: 0.95)
+            secondaryText = Color(red: 0.74, green: 0.72, blue: 0.64)
+            accent = Color(red: 0.65, green: 0.89, blue: 0.18)
+        default:
+            background = .black
+            chromeBackground = Color(red: 0.08, green: 0.08, blue: 0.08)
+            panelBackground = Color(red: 0.13, green: 0.13, blue: 0.13)
+            text = Color.green
+            secondaryText = Color.white.opacity(0.65)
+            accent = Color.blue
+        }
+    }
+}
+
+private struct CommandLibraryView: View {
+    let snippets: [Snippet]
+    let onRun: (String) -> Void
+    let onInsert: (String) -> Void
+    let onRefresh: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+    @State private var feedbackMessage = ""
+
+    private var quickActions: [QuickAction] {
+        filter(QuickActionsView.availableActions) {
+            $0.title.localizedCaseInsensitiveContains(searchText) ||
+            $0.subtitle.localizedCaseInsensitiveContains(searchText) ||
+            $0.command.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var filteredSnippets: [Snippet] {
+        filter(snippets) {
+            $0.name.localizedCaseInsensitiveContains(searchText) ||
+            $0.command.localizedCaseInsensitiveContains(searchText) ||
+            $0.description.localizedCaseInsensitiveContains(searchText) ||
+            $0.tags.joined(separator: " ").localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if !feedbackMessage.isEmpty {
+                    Section {
+                        Text(feedbackMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Quick Commands") {
+                    ForEach(quickActions) { action in
+                        commandRow(
+                            title: action.title,
+                            command: action.command,
+                            subtitle: action.subtitle,
+                            tags: []
+                        )
+                    }
+                }
+
+                Section("Saved Snippets") {
+                    if filteredSnippets.isEmpty {
+                        Text("No saved snippets yet.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(filteredSnippets) { snippet in
+                            commandRow(
+                                title: snippet.name,
+                                command: snippet.command,
+                                subtitle: snippet.description,
+                                tags: snippet.tags
+                            )
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Command Library")
+            .searchable(text: $searchText, prompt: "Search commands")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        onRefresh()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func commandRow(title: String, command: String, subtitle: String, tags: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .fontWeight(.semibold)
+
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                Button("Run") {
+                    onRun(command)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            Text(command)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+
+            if !tags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(tags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption2)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.blue.opacity(0.12))
+                                .foregroundStyle(.blue)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+
+            HStack {
+                Button("Insert") {
+                    onInsert(command)
+                    feedbackMessage = "Inserted into the current shell."
+                }
+                .buttonStyle(.bordered)
+
+                Button("Copy") {
+                    UIPasteboard.general.string = command
+                    feedbackMessage = "Copied to clipboard."
+                }
+                .buttonStyle(.bordered)
+            }
+            .font(.caption)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func filter<T>(_ items: [T], using predicate: (T) -> Bool) -> [T] {
+        guard !searchText.isEmpty else { return items }
+        return items.filter(predicate)
+    }
 }

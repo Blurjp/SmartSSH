@@ -17,8 +17,8 @@ struct QuickAction: Identifiable {
 
 struct QuickActionsView: View {
     let onSelect: (String) -> Void
-    
-    let quickActions: [QuickAction] = [
+
+    static let availableActions: [QuickAction] = [
         QuickAction(icon: "folder", title: "List Files", subtitle: "ls -la", command: "ls -la"),
         QuickAction(icon: "location", title: "Current Directory", subtitle: "pwd", command: "pwd"),
         QuickAction(icon: "person", title: "Who Am I", subtitle: "whoami", command: "whoami"),
@@ -32,7 +32,7 @@ struct QuickActionsView: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                ForEach(quickActions) { action in
+                ForEach(Self.availableActions) { action in
                     QuickActionButton(action: action) {
                         onSelect(action.command)
                     }

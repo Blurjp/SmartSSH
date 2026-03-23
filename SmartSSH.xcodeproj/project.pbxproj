@@ -21,6 +21,7 @@
 		5E2C92E419A3A18C0E6BFE11 /* AppColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E2C92E319A3A18C0E6BFE11 /* AppColor.swift */; };
 		85ECA688F2977DD74775F984 /* SmartSSHUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F93CA652D810BC204AB70E /* SmartSSHUITests.swift */; };
 		913750A3F58DEF8916754D97 /* HostsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CE527E2BD51D01C6993B3C5 /* HostsView.swift */; };
+		99FA1001C7B54D7F00000001 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99FA1001C7B54D7F00000002 /* SessionStore.swift */; };
 		A169DF63E7875EBA9C18981F /* SubscriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3216FA080110AB79AB755064 /* SubscriptionView.swift */; };
 		A2FB5C5F12A4683A019468EE /* Pods_SmartSSHTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E7C9F89C19C6BDA16CF085DE /* Pods_SmartSSHTests.framework */; };
 		B085D50FFFE6038A078AF072 /* SmartSSHApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59D54CCC923C3743FC44314 /* SmartSSHApp.swift */; };
@@ -71,6 +72,7 @@
 		6EC8D88FAA8117FDC65DD423 /* QuickActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActions.swift; sourceTree = "<group>"; };
 		76C875BE29D9ECC5ECEBCEC3 /* SubscriptionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionManager.swift; sourceTree = "<group>"; };
 		787BCE4879DBAC889A25DBDE /* KeysView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeysView.swift; sourceTree = "<group>"; };
+		99FA1001C7B54D7F00000002 /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		7FC07013A08CD577CDDEA223 /* SmartSSH.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SmartSSH.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		870F1072B8CAE72D91DC7E0A /* Pods-SmartSSHUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SmartSSHUITests.release.xcconfig"; path = "Target Support Files/Pods-SmartSSHUITests/Pods-SmartSSHUITests.release.xcconfig"; sourceTree = "<group>"; };
 		90293ECD5EE99B4E2ACCADE7 /* Pods-SmartSSH.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SmartSSH.debug.xcconfig"; path = "Target Support Files/Pods-SmartSSH/Pods-SmartSSH.debug.xcconfig"; sourceTree = "<group>"; };
@@ -175,6 +177,7 @@
 				A9150627FAC9148979D4104F /* AIService.swift */,
 				17160867D25F63BDD868E578 /* DataController.swift */,
 				B43EC0028BD62D8D45F4B388 /* KeychainService.swift */,
+				99FA1001C7B54D7F00000002 /* SessionStore.swift */,
 				F2BA0AE0890F6559685100C6 /* SFTPClient.swift */,
 				617A837FE0FCF7161EDD79BA /* SSHClient.swift */,
 				486A81497D7085CBCE3092DC /* SSHManager.swift */,
@@ -500,6 +503,7 @@
 				5E2C92E419A3A18C0E6BFE11 /* AppColor.swift in Sources */,
 				5338B4A58AB3619CAB421E6F /* QuickActions.swift in Sources */,
 				KEX11111111111111111111 /* NMSSHSession+KEX.m in Sources */,
+				99FA1001C7B54D7F00000001 /* SessionStore.swift in Sources */,
 				BD7968D68D105BB1893EE091 /* SFTPClient.swift in Sources */,
 				5159CB75FB583358F1DE0476 /* SFTPView.swift in Sources */,
 				F01DF106172BFAA161183FAB /* SSHClient.swift in Sources */,

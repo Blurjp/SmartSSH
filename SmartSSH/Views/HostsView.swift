@@ -14,6 +14,7 @@ import UIKit
 
 struct HostsView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @ObservedObject private var sessionStore = SessionStore.shared
     @State private var hosts: [Host] = []
     @State private var showingAddHost = false
     @State private var searchText = ""
@@ -380,7 +381,7 @@ struct HostsView: View {
             host.status = "connecting"
         }
 
-        SSHClient.shared.connect(to: host) { result in
+        sessionStore.connect(to: host) { result in
             DispatchQueue.main.async {
                 switch result {
                 case .success:
@@ -425,11 +426,11 @@ struct HostsView: View {
 
 struct HostRowView: View, Equatable {
     let host: Host
-    @ObservedObject var sshClient = SSHClient.shared
+    @ObservedObject private var sessionStore = SessionStore.shared
 
     static func == (lhs: HostRowView, rhs: HostRowView) -> Bool {
         lhs.host.id == rhs.host.id &&
-        lhs.host.status == rhs.host.status &&
+        SessionStore.shared.status(for: lhs.host) == SessionStore.shared.status(for: rhs.host) &&
         lhs.host.wrappedName == rhs.host.wrappedName
     }
     
@@ -438,7 +439,7 @@ struct HostRowView: View, Equatable {
             // Status icon with animation
             ZStack {
                 Circle()
-                    .fill(Color.appNamed(host.statusColor).opacity(0.2))
+                    .fill(Color.appNamed(statusColor).opacity(0.2))
                     .frame(width: 40, height: 40)
                 
                 Image(systemName: statusIcon)
@@ -479,9 +480,9 @@ struct HostRowView: View, Equatable {
             // Status indicator
             VStack(alignment: .trailing, spacing: 4) {
                 Circle()
-                    .fill(Color.appNamed(host.statusColor))
+                    .fill(Color.appNamed(statusColor))
                     .frame(width: 10, height: 10)
-                    .animation(.easeInOut, value: host.status)
+                    .animation(.easeInOut, value: sessionStore.status(for: host))
                 
                 if let lastConnected = host.lastConnectedAt {
                     Text(lastConnected, style: .relative)
@@ -495,7 +496,7 @@ struct HostRowView: View, Equatable {
     }
     
     private var statusIcon: String {
-        switch host.status {
+        switch sessionStore.status(for: host) {
         case "connected": return "antenna.radiowaves.left.and.right"
         case "connecting": return "antenna.radiowaves.left.and.right"
         case "error": return "exclamationmark.triangle"
@@ -520,6 +521,15 @@ struct HostRowView: View, Equatable {
         }
 
         return badges
+    }
+
+    private var statusColor: String {
+        switch sessionStore.status(for: host) {
+        case "connected": return "green"
+        case "connecting": return "yellow"
+        case "error": return "red"
+        default: return "gray"
+        }
     }
 }
 

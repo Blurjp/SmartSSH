@@ -328,8 +328,11 @@ class SFTPClient: ObservableObject {
     private var _sftp: NMSFTP?
 
     private func connectedSFTP() -> NMSFTP? {
-        if let sftp = _sftp, sftp.isConnected { return sftp }
-        guard let session = SSHClient.shared.activeSession else { return nil }
+        guard let session = SessionStore.shared.selectedSession?.client.activeSession else { return nil }
+        if let sftp = _sftp, sftp.isConnected, sftp.session === session {
+            return sftp
+        }
+        _sftp?.disconnect()
         let sftp = NMSFTP(session: session)
         guard sftp.connect() else { return nil }
         _sftp = sftp
@@ -339,6 +342,16 @@ class SFTPClient: ObservableObject {
     func disconnectSFTP() {
         _sftp?.disconnect()
         _sftp = nil
+    }
+
+    func resetNavigation() {
+        DispatchQueue.main.async {
+            self.currentPath = "/"
+            self.files = []
+            self.pathHistory = ["/"]
+            self.historyIndex = 0
+        }
+        disconnectSFTP()
     }
 
     private func normalizedParentPath(for path: String) -> String {

@@ -422,6 +422,46 @@ class SSHClient: NSObject, ObservableObject, NMSSHSessionDelegate, NMSSHChannelD
         }
     }
 
+    func sendInput(
+        _ text: String,
+        addNewline: Bool = false,
+        completion: ((Result<Void, SSHError>) -> Void)? = nil
+    ) {
+        guard let session = activeSession, isShellActive else {
+            completion?(.failure(.connectionFailed("Not connected")))
+            return
+        }
+
+        let payload = addNewline ? text + "\n" : text
+
+        commandQueue.async { [weak self] in
+            guard let self else { return }
+
+            var error: NSError?
+            let success = session.channel.write(
+                payload,
+                error: &error,
+                timeout: NSNumber(value: self.connectionTimeout)
+            )
+
+            if let error {
+                let message = error.localizedDescription
+                self.appendOutput("\(message)\n")
+                completion?(.failure(.commandFailed(message)))
+                return
+            }
+
+            guard success else {
+                let message = "Failed to write to remote shell"
+                self.appendOutput("\(message)\n")
+                completion?(.failure(.commandFailed(message)))
+                return
+            }
+
+            completion?(.success(()))
+        }
+    }
+
     func requestTerminalSize(width: Int, height: Int) {
         guard width > 0, height > 0, let session = activeSession, isShellActive else { return }
 

@@ -360,7 +360,7 @@ struct AddHostView: View {
         } header: {
             Text("Routing")
         } footer: {
-            Text("Save local forwards, a jump host, and proxy details with this host. Tunnel execution is not active yet, but the connection plan is stored and exportable.")
+            Text("Save local forwards, a jump host, and proxy details with this host. Local forwards start automatically when the SSH session connects, and the routing plan is stored with the host.")
                 .font(.caption)
         }
     }
