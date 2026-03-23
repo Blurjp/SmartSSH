@@ -31,16 +31,30 @@ struct TerminalView: View {
                 }
 
                 if let selectedSession = sessionStore.selectedSession {
-                    ActiveTerminalSessionView(
-                        storedSession: selectedSession,
-                        fontSize: fontSize,
-                        fontName: fontName,
-                        theme: theme,
-                        savedSnippets: savedSnippets,
-                        showingCommandLibrary: $showingCommandLibrary,
-                        onLoadSnippets: loadSavedSnippets
-                    )
-                    .id(selectedSession.id)
+                    if sessionStore.isSplitViewEnabled, let splitSession = sessionStore.splitSession {
+                        SplitTerminalWorkspaceView(
+                            primarySession: selectedSession,
+                            secondarySession: splitSession,
+                            fontSize: fontSize,
+                            fontName: fontName,
+                            theme: theme,
+                            savedSnippets: savedSnippets,
+                            showingCommandLibrary: $showingCommandLibrary,
+                            onLoadSnippets: loadSavedSnippets
+                        )
+                        .id("\(selectedSession.id.uuidString)-\(splitSession.id.uuidString)")
+                    } else {
+                        ActiveTerminalSessionView(
+                            storedSession: selectedSession,
+                            fontSize: fontSize,
+                            fontName: fontName,
+                            theme: theme,
+                            savedSnippets: savedSnippets,
+                            showingCommandLibrary: $showingCommandLibrary,
+                            onLoadSnippets: loadSavedSnippets
+                        )
+                        .id(selectedSession.id)
+                    }
                 } else {
                     Color.clear
                 }
@@ -118,6 +132,32 @@ struct TerminalView: View {
                 }
             } label: {
                 Label("Font Size", systemImage: "textformat.size")
+            }
+
+            if sessionStore.sessions.count > 1 {
+                Divider()
+
+                Button {
+                    sessionStore.toggleSplitView()
+                } label: {
+                    Label(
+                        sessionStore.isSplitViewEnabled ? "Close Split" : "Open Split",
+                        systemImage: sessionStore.isSplitViewEnabled ? "rectangle.split.2x1.slash" : "rectangle.split.2x1"
+                    )
+                }
+
+                Menu {
+                    ForEach(sessionStore.sessions.filter { $0.id != sessionStore.selectedSession?.id }) { session in
+                        Button {
+                            sessionStore.setSplitSession(sessionID: session.id)
+                        } label: {
+                            Label(session.host.wrappedName, systemImage: "rectangle.split.2x1")
+                        }
+                    }
+                } label: {
+                    Label("Split Session", systemImage: "square.split.bottomhalffilled")
+                }
+                .disabled(sessionStore.sessions.count < 2)
             }
 
             if let sshClient = sessionStore.selectedSession?.client {
@@ -209,12 +249,80 @@ struct TerminalView: View {
     }
 }
 
+private struct SplitTerminalWorkspaceView: View {
+    let primarySession: StoredSession
+    let secondarySession: StoredSession
+    let fontSize: Double
+    let fontName: String
+    let theme: TerminalTheme
+    let savedSnippets: [Snippet]
+    @Binding var showingCommandLibrary: Bool
+    let onLoadSnippets: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            WorkspacePaneLabel(title: "Primary", host: primarySession.host.wrappedName, theme: theme)
+
+            ActiveTerminalSessionView(
+                storedSession: primarySession,
+                fontSize: fontSize,
+                fontName: fontName,
+                theme: theme,
+                savedSnippets: savedSnippets,
+                showingCommandLibrary: $showingCommandLibrary,
+                onLoadSnippets: onLoadSnippets,
+                showsStatusBar: false
+            )
+            .frame(maxHeight: .infinity)
+
+            Divider()
+                .background(theme.chromeBackground)
+
+            WorkspacePaneLabel(title: "Split", host: secondarySession.host.wrappedName, theme: theme)
+
+            ActiveTerminalSessionView(
+                storedSession: secondarySession,
+                fontSize: fontSize,
+                fontName: fontName,
+                theme: theme,
+                savedSnippets: savedSnippets,
+                showingCommandLibrary: $showingCommandLibrary,
+                onLoadSnippets: onLoadSnippets,
+                showsStatusBar: false
+            )
+            .frame(maxHeight: .infinity)
+        }
+    }
+}
+
+private struct WorkspacePaneLabel: View {
+    let title: String
+    let host: String
+    let theme: TerminalTheme
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+            Spacer()
+            Text(host)
+                .font(.caption2)
+                .foregroundStyle(theme.secondaryText)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 6)
+        .background(theme.chromeBackground)
+    }
+}
+
 private struct ActiveTerminalSessionView: View {
     let storedSession: StoredSession
     let fontSize: Double
     let fontName: String
     let theme: TerminalTheme
     let savedSnippets: [Snippet]
+    let showsStatusBar: Bool
     @Binding var showingCommandLibrary: Bool
     let onLoadSnippets: () -> Void
 
@@ -227,13 +335,15 @@ private struct ActiveTerminalSessionView: View {
         theme: TerminalTheme,
         savedSnippets: [Snippet],
         showingCommandLibrary: Binding<Bool>,
-        onLoadSnippets: @escaping () -> Void
+        onLoadSnippets: @escaping () -> Void,
+        showsStatusBar: Bool = true
     ) {
         self.storedSession = storedSession
         self.fontSize = fontSize
         self.fontName = fontName
         self.theme = theme
         self.savedSnippets = savedSnippets
+        self.showsStatusBar = showsStatusBar
         self._showingCommandLibrary = showingCommandLibrary
         self.onLoadSnippets = onLoadSnippets
         _sshClient = ObservedObject(wrappedValue: storedSession.client)
@@ -241,7 +351,9 @@ private struct ActiveTerminalSessionView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            statusBar
+            if showsStatusBar {
+                statusBar
+            }
 
             TerminalTextView(
                 sshClient: sshClient,

@@ -8,8 +8,10 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.managedObjectContext) private var viewContext
     @State private var selectedTab = 0
     @ObservedObject private var subscriptionManager = SubscriptionManager.shared
+    @ObservedObject private var sessionStore = SessionStore.shared
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -60,6 +62,9 @@ struct ContentView: View {
                 .tag(5)
         }
         .tint(.blue)
+        .task {
+            sessionStore.restoreWorkspace(in: viewContext)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .smartSSHSelectTab)) { notification in
             guard let tab = notification.object as? Int else { return }
             selectedTab = tab
